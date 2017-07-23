@@ -48,7 +48,7 @@ func newSession() *Session {
 		fmt.Println("COLLISSIONOSNEUHSEIOT")
 		return newSession() //recursion solves everything
 	}
-	sess = makeSession(ID)
+	sess := makeSession(ID)
 	sessions[ID] = sess
 	return sess
 }
@@ -75,14 +75,12 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	if !ok {
 		return errors.New("we dont have a ssh connection for this session id what are you even doing bro lol")
 	}
-	addConnAndListen(conn, sess)
+	return sess.addConnAndListen(conn)
 }
 
 func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) { //idk how to pass in server addr
 	sess := newSession()
-	sess.sshConn = &Connection{
-		conn: ssh,
-	}
+	sess.sshConn = ssh
 
 	//make a connection to server
 	//go listen
@@ -93,16 +91,18 @@ func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) { //idk how t
 func (sess *Session) listenSSH() error {
 	buf := make([]byte, BUF_SIZE)
 	for {
-		n, err := sess.sshConn.read(buf)
+
+		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
 			return err
 		}
+		fmt.Println("Read", n, "bytes from ssh")
 		//make protobuf packet
 		//pick from sess.conns
 		//send
 	}
 }
-func (sess *Session) addConnAndListen(netconn *net.Conn) {
+func (sess *Session) addConnAndListen(netconn *net.Conn) error {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	conn := &Connection{
@@ -110,6 +110,7 @@ func (sess *Session) addConnAndListen(netconn *net.Conn) {
 	}
 	sess.conns = append(sess.conns, conn)
 	go connListen(sess, conn)
+	return nil
 }
 func connListen(sess *Session, conn *Connection) error {
 	return nil
