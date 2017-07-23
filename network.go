@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -20,7 +21,7 @@ type Connection struct {
 type Session struct {
 	sessionID SessionID
 	sshConn   *net.Conn
-	conns     []Connection
+	conns     []*Connection
 	lock      sync.Mutex
 }
 
@@ -66,10 +67,17 @@ func ServerReceivedClientConnection(conn *net.Conn) { //dont pass in ID, we'll r
 	//start listening
 }
 
-func ClientCreateServerConnection(conn *net.Conn, id SessionID) {
+func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	//conn.writeUint64(id)
-	//
+	sessionsLock.Lock()
+	defer sessionsLock.Unlock()
+	sess, ok := sessions[id]
+	if !ok {
+		return errors.New("we dont have a ssh connection for this session id what are you even doing bro lol")
+	}
+	addConnAndListen(conn, sess)
 }
+
 func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) { //idk how to pass in server addr
 	sess := newSession()
 	sess.sshConn = &Connection{
@@ -81,6 +89,7 @@ func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) { //idk how t
 	go sess.listenSSH()
 
 }
+
 func (sess *Session) listenSSH() error {
 	buf := make([]byte, BUF_SIZE)
 	for {
@@ -93,6 +102,15 @@ func (sess *Session) listenSSH() error {
 		//send
 	}
 }
-func (conn *Connection) listen() error {
+func (sess *Session) addConnAndListen(netconn *net.Conn) {
+	sess.lock.Lock()
+	defer sess.lock.Unlock()
+	conn := &Connection{
+		conn: netconn,
+	}
+	sess.conns = append(sess.conns, conn)
+	go connListen(sess, conn)
+}
+func connListen(sess *Session, conn *Connection) {
 
 }
