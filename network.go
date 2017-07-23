@@ -68,5 +68,5 @@ func (sess *Session) listenSSH() error {
 	}
 }
 func (conn *Connection) listen() error {
-
+	return nil
 }
