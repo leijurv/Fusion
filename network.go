@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"sync"
 )
@@ -36,6 +37,20 @@ func getSession(id SessionID) *Session {
 	}
 	return sess
 }
+func newSession() *Session {
+	sessionsLock.Lock()
+	defer sessionsLock.Unlock()
+	ID := SessionID(5021) //generate session ID
+	_, ok := sessions[ID]
+	if ok {
+		//omfg collision??
+		fmt.Println("COLLISSIONOSNEUHSEIOT")
+		return newSession() //recursion solves everything
+	}
+	sess = makeSession(ID)
+	sessions[ID] = sess
+	return sess
+}
 func makeSession(id SessionID) *Session {
 	return &Session{
 		sessionID: id, //this is the only field to init
@@ -54,6 +69,17 @@ func ServerReceivedClientConnection(conn *net.Conn) { //dont pass in ID, we'll r
 func ClientCreateServerConnection(conn *net.Conn, id SessionID) {
 	//conn.writeUint64(id)
 	//
+}
+func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) { //idk how to pass in server addr
+	sess := newSession()
+	sess.sshConn = &Connection{
+		conn: ssh,
+	}
+
+	//make a connection to server
+	//go listen
+	go sess.listenSSH()
+
 }
 func (sess *Session) listenSSH() error {
 	buf := make([]byte, BUF_SIZE)
