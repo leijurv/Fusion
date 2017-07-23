@@ -1,0 +1,13 @@
+syntax = "proto3";
+package "packets";
+
+message Packet {
+  oneof body {
+    Data data = 0;
+  }
+}
+
+message Data {
+  uint32 sequenceID = 0;
+  bytes content = 1;
+}
