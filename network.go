@@ -111,6 +111,6 @@ func (sess *Session) addConnAndListen(netconn *net.Conn) {
 	sess.conns = append(sess.conns, conn)
 	go connListen(sess, conn)
 }
-func connListen(sess *Session, conn *Connection) {
-
+func connListen(sess *Session, conn *Connection) error {
+	return nil
 }
