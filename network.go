@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	_ "github.com/howardstark/fusion/protos"
+	"github.com/howardstark/fusion/protos"
 )
 
 const (
@@ -115,9 +116,15 @@ func (sess *Session) listenSSH() error {
 			return err
 		}
 		fmt.Println("Read", n, "bytes from ssh")
-		//make protobuf packet
-		//pick from sess.conns
-		//send
+		packet := packets.Packet{
+			Body: packets.Packet_Data{
+				Data: &packets.Data{
+					SequenceID: uint32(420),
+					Content:    buf,
+				},
+			},
+		}
+		_ := packet
 	}
 }
 func (sess *Session) addConnAndListen(netconn *net.Conn) error {
