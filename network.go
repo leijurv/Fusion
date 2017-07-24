@@ -186,6 +186,7 @@ func (sess *Session) listenSSH() error {
 		if packetErr != nil {
 			return errors.New("Run.")
 		}
+		packetData = append(packetData, [2]byte(len(packetData))...)
 		sess.sendPacket(packetData)
 	}
 }
