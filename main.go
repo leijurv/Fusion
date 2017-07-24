@@ -45,18 +45,18 @@ func Client(serverAddr string) error {
 			sessionID := ClientReceivedSSHConnection(conn)
 			err := SetupClient(sessionID, serverAddr)
 			if err != nil {
-				fmt.Println("Error with", conn, err)
+				fmt.Println("SEARCHFORME Error with", conn, err)
 			}
 		}()
 	}
 }
 
 func SetupClient(sessionID SessionID, serverAddr string) error {
-	conn, err := net.Dial("tcp", serverAddr)
-	if err != nil {
-		return err
-	}
-	ClientCreateServerConnection(conn, sessionID) // would be DANK if it made connections over every available interface. No.
+	//conn, err := net.Dial("tcp", serverAddr)
+	//if err != nil {
+	//		return err
+	//	}
+	//ClientCreateServerConnection(conn, sessionID) // would be DANK if it made connections over every available interface. No.
 	ifaces, ifaceErr := net.Interfaces()
 	if ifaceErr != nil {
 		return ifaceErr
@@ -68,28 +68,34 @@ func SetupClient(sessionID SessionID, serverAddr string) error {
 			return addrErr
 		}
 		for _, addr := range addrs {
+			fmt.Println("ATTEMPTING", iface, addr)
 			serverAddr, serverErr := net.ResolveTCPAddr("tcp", serverAddr)
 			if serverErr != nil {
-				return serverErr
+				continue
+				//return serverErr
 			}
 			fmt.Println("serverAddr: ", serverAddr)
 			ip, _, ipErr := net.ParseCIDR(addr.String())
 			if ipErr != nil {
-				return ipErr
+				continue
+				//return ipErr
 			}
 			localAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
 			if ip.IsLinkLocalMulticast() {
 				continue
 			}
 			if localErr != nil {
-				return localErr
+				continue
+				//return localErr
 			}
 			fmt.Println("localAddr: ", localAddr)
 			conn, err := net.DialTCP("tcp", localAddr, serverAddr)
 			if err != nil {
-				return err
+				continue
+				//return err
 			}
 			ClientCreateServerConnection(conn, sessionID) //this just makes two connections over the same interface (for testing)
+			//break
 		}
 	}
 	return nil

@@ -35,7 +35,7 @@ func dedup(packet packets.Packet, rawPacket []byte) bool {
 	defer packetDedupLock.Unlock()
 	_, ok := packetDedup[hash]
 	if ok {
-		fmt.Println("Ignoring already received packet with hash", hash)
+		//fmt.Println("Ignoring already received packet with hash", hash)
 		return true
 	}
 	packetDedup[hash] = true
@@ -43,7 +43,7 @@ func dedup(packet packets.Packet, rawPacket []byte) bool {
 }
 func (sess *Session) wrap(data []byte) []byte {
 	seq := sess.getOutgoingSeq()
-	fmt.Println("Wrapping packet with seq", seq)
+	//fmt.Println("Wrapping packet with seq", seq)
 	packet := packets.Packet{
 		Body: &packets.Packet_Data{
 			Data: &packets.Data{

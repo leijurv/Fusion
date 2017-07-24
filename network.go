@@ -13,7 +13,7 @@ import (
 
 const (
 	BUF_SIZE     = 65536
-	RAND_REORDER = true
+	RAND_REORDER = false
 )
 
 type Connection struct {
@@ -99,13 +99,20 @@ func (sess *Session) sendOnAll(serialized []byte) {
 	sess.lock.Lock() // lock is ok because we are starting goroutines to do the blocking io
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {
-		fmt.Println("Writing")
+		//fmt.Println("Writing")
 		go sess.conns[i].conn.Write(serialized) // goroutine is fine because order doesn't matter
 	}
 }
 
 func (sess *Session) listenSSH() error {
 	for {
+		buf := make([]byte, BUF_SIZE)
+		n, err := (*sess.sshConn).Read(buf)
+		if err != nil {
+			fmt.Println("SSH read err, killing session", sess.sessionID, err)
+			go sess.kill()
+			return err
+		}
 		if len(sess.conns) == 0 {
 			fmt.Println("listenssh waiting for connections...  ", sess.sessionID)
 		}
@@ -115,13 +122,6 @@ func (sess *Session) listenSSH() error {
 				fmt.Println("listenssh dying because session killed")
 				return nil
 			}
-		}
-		buf := make([]byte, BUF_SIZE)
-		n, err := (*sess.sshConn).Read(buf)
-		if err != nil {
-			fmt.Println("SSH read err, killing session", sess.sessionID, err)
-			go sess.kill()
-			return err
 		}
 		fmt.Println("Read", n, "bytes from ssh")
 		if !RAND_REORDER {
@@ -186,9 +186,9 @@ func (sess *Session) writeSSH(data []byte) {
 func connListen(sess *Session, conn *Connection) error {
 	fmt.Println("Beginning conn listen")
 	for {
-		fmt.Println("Waiting for packet...")
+		//fmt.Println("Waiting for packet...")
 		packet, packetErr, rawPacket := readProtoPacket(conn)
-		fmt.Println("Got packet...")
+		//fmt.Println("Got packet...")
 		if packetErr != nil {
 			fmt.Println("Read err", packetErr)
 			return packetErr
