@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
 	"github.com/howardstark/fusion/protos"
 )
 
@@ -36,7 +37,9 @@ func getSession(id SessionID) *Session {
 	defer sessionsLock.Unlock()
 	sess, ok := sessions[id]
 	if !ok || sess == nil {
-		sess = makeSession(id)
+		sess = &Session{
+			sessionID: id,
+		}
 		sessions[id] = sess
 	}
 	return sess
@@ -51,17 +54,12 @@ func newSession() *Session {
 		fmt.Println("COLLISSIONOSNEUHSEIOT")
 		return newSession() //recursion solves everything
 	}
-	sess := makeSession(ID)
+	sess := &Session{
+		sessionID: ID,
+	}
 	sessions[ID] = sess
 	return sess
 }
-func makeSession(id SessionID) *Session {
-	return &Session{
-		sessionID: id, //this is the only field to init
-		//dont make sshconn, we dont know if were server or client
-	}
-}
-
 func ServerReceivedClientConnection(conn *net.Conn) error {
 	var id int64
 	err := binary.Read(*conn, binary.LittleEndian, &id)
