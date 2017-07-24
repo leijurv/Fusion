@@ -56,12 +56,37 @@ func SetupClient(sessionID SessionID, serverAddr string) error {
 	if err != nil {
 		return err
 	}
-	ClientCreateServerConnection(conn, sessionID) //this just makes two connections over the same interface (for testing)
-	conn, err = net.Dial("tcp", serverAddr)
-	if err != nil {
-		return err
+	ClientCreateServerConnection(conn, sessionID) // would be DANK if it made connections over every available interface. No.
+	ifaces, ifaceErr := net.Interfaces()
+	if ifaceErr != nil {
+		return ifaceErr
 	}
-	ClientCreateServerConnection(conn, sessionID) //would be DANK if it made connections over every available interface
+	for _, iface := range ifaces {
+		addrs, addrErr := iface.Addrs()
+		if addrErr != nil {
+			return addrErr
+		}
+		for _, addr := range addrs {
+			if addr.Network()[:3] != "tcp" {
+				continue
+			}
+			serverAddr, serverErr := net.ResolveTCPAddr("tcp", serverAddr)
+			if serverErr != nil {
+				return serverErr
+			}
+			fmt.Println("serverAddr: ", serverAddr)
+			localAddr, localErr := net.ResolveTCPAddr("tcp", addr.String())
+			if localErr != nil {
+				return localErr
+			}
+			fmt.Println("localAddr: ", localAddr)
+			conn, err = net.DialTCP("tcp", localAddr, serverAddr)
+			if err != nil {
+				return err
+			}
+			ClientCreateServerConnection(conn, sessionID) //this just makes two connections over the same interface (for testing)
+		}
+	}
 	return nil
 }
 
