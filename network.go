@@ -211,7 +211,6 @@ func (sess *Session) listenSSH() error {
 		perm := rSrc.Perm(len(packets))
 		for i := 0; i < len(perm); i++ {
 			sess.sendPacket(packets[perm[i]])
-			packets = append(packets[:perm[i]], packets[perm[i]+1:]...)
 		}
 	}
 }
