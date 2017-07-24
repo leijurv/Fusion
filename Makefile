@@ -7,5 +7,5 @@ build:
 	go build
 
 protos:
-	rm -rf protos/*
-	protoc -I=./Protobuf/ --go_out=./protos ./Protobuf/*.proto
+	rm -rf protos/*.go
+	protoc -I=./protos/ --go_out=./protos ./protos/*.proto

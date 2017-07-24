@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"github.com/howardstark/fusion/protos"
 )
 
 const (

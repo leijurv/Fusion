@@ -1,13 +1,13 @@
 syntax = "proto3";
-package "packets";
+package packets;
 
 message Packet {
   oneof body {
-    Data data = 0;
+    Data data = 1;
   }
 }
 
 message Data {
-  uint32 sequenceID = 0;
-  bytes content = 1;
+  uint32 sequenceID = 1;
+  bytes content = 2;
 }
