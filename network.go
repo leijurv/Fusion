@@ -96,7 +96,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
 		fmt.Println("Server making new ssh connection for session id", id)
-		sshConn, err := net.Dial("tcp", "localhost:1234")
+		sshConn, err := net.Dial("tcp", "localhost:22")
 		if err != nil {
 			fmt.Println("localhost dial err", err)
 			return err
