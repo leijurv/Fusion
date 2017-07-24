@@ -240,7 +240,7 @@ func connListen(sess *Session, conn *Connection) error {
 
 func readProtoPacket(conn *Connection) (packets.Packet, error) {
 	var packet packets.Packet
-	packetLen := make([]byte, 2)
+	packetLen := make([]byte, 4)
 	_, lenErr := io.ReadFull(conn.conn, packetLen)
 	if lenErr != nil {
 		return packet, lenErr

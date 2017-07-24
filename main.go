@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"flag"
+	"fmt"
 )
 
 var flagListenMode bool
@@ -22,6 +23,7 @@ func main() {
 }
 
 func Client(serverAddr string) error {
+	fmt.Println("del cliento")
 	ln, err := net.Listen("tcp", ":5021")
 	if err != nil {
 		return err
@@ -36,6 +38,7 @@ func Client(serverAddr string) error {
 }
 
 func Server() error {
+	fmt.Println("el servo")
 	ln, err := net.Listen("tcp", ":5022")
 	if err != nil {
 		return err
