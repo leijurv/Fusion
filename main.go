@@ -52,11 +52,6 @@ func Client(serverAddr string) error {
 }
 
 func SetupClient(sessionID SessionID, serverAddr string) error {
-	//conn, err := net.Dial("tcp", serverAddr)
-	//if err != nil {
-	//	return err
-	//}
-	//ClientCreateServerConnection(conn, sessionID) // would be DANK if it made connections over every available interface. No.
 	ifaces, ifaceErr := net.Interfaces()
 	if ifaceErr != nil {
 		return ifaceErr
@@ -68,9 +63,6 @@ func SetupClient(sessionID SessionID, serverAddr string) error {
 			return addrErr
 		}
 		for _, addr := range addrs {
-			//if addr.Network()[:3] != "tcp" {
-			//	continue
-			//}
 			serverAddr, serverErr := net.ResolveTCPAddr("tcp", serverAddr)
 			if serverErr != nil {
 				return serverErr
