@@ -23,10 +23,11 @@ type Connection struct {
 }
 
 type Session struct {
-	sessionID SessionID
-	sshConn   *net.Conn
-	conns     []*Connection
-	lock      sync.Mutex
+	sessionID   SessionID
+	sshConn     *net.Conn
+	conns       []*Connection
+	lock        sync.Mutex
+	outgoingSeq uint32
 }
 
 var sessions map[SessionID]*Session
@@ -63,7 +64,7 @@ func makeSession(id SessionID) *Session {
 	}
 }
 
-func ServerReceivedClientConnection(conn *net.Conn) error { //dont pass in ID, we'll read it
+func ServerReceivedClientConnection(conn *net.Conn) error {
 	var id int64
 	err := binary.Read(*conn, binary.LittleEndian, &id)
 	if err != nil {
@@ -73,7 +74,12 @@ func ServerReceivedClientConnection(conn *net.Conn) error { //dont pass in ID, w
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
-		//set ssh conn to a new one to localhost:22 if it's nil
+		conn, err := net.Dial("tcp", "localhost:22")
+		if err != nil {
+			return err
+		}
+		sess.sshConn = &conn
+		go sess.listenSSH()
 	}
 	return sess.addConnAndListen(conn)
 }
@@ -106,7 +112,18 @@ func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
 	go sess.listenSSH()
 	return nil
 }
-
+func (sess *Session) getOutgoingSeq() uint32 {
+	sess.lock.Lock()
+	defer sess.lock.Unlock()
+	seq := sess.outgoingSeq
+	sess.outgoingSeq++
+	return seq
+}
+func (sess *Session) sendPacket(serialized []byte) {
+	for i := 0; i < len(sess.conns); i++ {
+		(*sess.conns[i].conn).Write(serialized)
+	}
+}
 func (sess *Session) listenSSH() error {
 	buf := make([]byte, BUF_SIZE)
 	for {
@@ -119,12 +136,14 @@ func (sess *Session) listenSSH() error {
 		packet := packets.Packet{
 			Body: &packets.Packet_Data{
 				Data: &packets.Data{
-					SequenceID: uint32(420),
+					SequenceID: sess.getOutgoingSeq(),
 					Content:    buf[:n],
 				},
 			},
 		}
 		_ = packet.Body
+		serialized := []byte("this is the packet")
+		sess.sendPacket(serialized)
 	}
 }
 func (sess *Session) addConnAndListen(netconn *net.Conn) error {
