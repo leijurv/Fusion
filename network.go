@@ -27,7 +27,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Server received connection", conn, " for session id", id)
+	fmt.Println("Server received connection", conn, " for session id", id, "from remote", conn.RemoteAddr(), "and local", conn.LocalAddr())
 	err = binary.Write(conn, binary.BigEndian, id) //big endian prevents simple reflection
 	if err != nil {
 		return err
