@@ -117,14 +117,14 @@ func (sess *Session) listenSSH() error {
 		}
 		fmt.Println("Read", n, "bytes from ssh")
 		packet := packets.Packet{
-			Body: packets.Packet_Data{
+			Body: &packets.Packet_Data{
 				Data: &packets.Data{
 					SequenceID: uint32(420),
-					Content:    buf,
+					Content:    buf[:n],
 				},
 			},
 		}
-		_ := packet
+		_ = packet.Body
 	}
 }
 func (sess *Session) addConnAndListen(netconn *net.Conn) error {
