@@ -165,6 +165,7 @@ func (sess *Session) addConnAndListen(netconn *net.Conn) {
 }
 
 func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
+	fmt.Println("Sending",len(data),"bytes to ssh")
 	(*sess.sshConn).Write(data)
 }
 
