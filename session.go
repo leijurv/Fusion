@@ -13,6 +13,7 @@ import (
 )
 
 type SessionID uint64
+
 type Sent struct {
 	seq     uint32
 	data    *[]byte
@@ -20,6 +21,7 @@ type Sent struct {
 	date    int64
 	session *Session
 }
+
 type Session struct {
 	lock        sync.Mutex // todo rwmutex
 	sessionID   SessionID
