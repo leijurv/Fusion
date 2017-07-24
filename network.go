@@ -22,10 +22,11 @@ type Connection struct {
 }
 
 type Session struct {
-	sessionID SessionID
-	sshConn   *net.Conn
-	conns     []*Connection
-	lock      sync.Mutex
+	sessionID   SessionID
+	sshConn     *net.Conn
+	conns       []*Connection
+	lock        sync.Mutex
+	outgoingSeq uint32
 }
 
 var sessions map[SessionID]*Session
@@ -36,7 +37,9 @@ func getSession(id SessionID) *Session {
 	defer sessionsLock.Unlock()
 	sess, ok := sessions[id]
 	if !ok || sess == nil {
-		sess = makeSession(id)
+		sess = &Session{
+			sessionID: id,
+		}
 		sessions[id] = sess
 	}
 	return sess
@@ -51,18 +54,13 @@ func newSession() *Session {
 		fmt.Println("COLLISSIONOSNEUHSEIOT")
 		return newSession() //recursion solves everything
 	}
-	sess := makeSession(ID)
+	sess := &Session{
+		sessionID: ID,
+	}
 	sessions[ID] = sess
 	return sess
 }
-func makeSession(id SessionID) *Session {
-	return &Session{
-		sessionID: id, //this is the only field to init
-		//dont make sshconn, we dont know if were server or client
-	}
-}
-
-func ServerReceivedClientConnection(conn *net.Conn) error { //dont pass in ID, we'll read it
+func ServerReceivedClientConnection(conn *net.Conn) error {
 	var id int64
 	err := binary.Read(*conn, binary.LittleEndian, &id)
 	if err != nil {
@@ -72,9 +70,15 @@ func ServerReceivedClientConnection(conn *net.Conn) error { //dont pass in ID, w
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
-		//set ssh conn to a new one to localhost:22 if it's nil
+		conn, err := net.Dial("tcp", "localhost:22")
+		if err != nil {
+			return err
+		}
+		sess.sshConn = &conn
+		go sess.listenSSH()
 	}
-	return sess.addConnAndListen(conn)
+	sess.addConnAndListen(conn)
+	return nil
 }
 
 func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
@@ -88,7 +92,8 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	if !ok {
 		return errors.New("we dont have a ssh connection for this session id what are you even doing bro lol")
 	}
-	return sess.addConnAndListen(conn)
+	sess.addConnAndListen(conn)
+	return nil
 }
 
 func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
@@ -105,28 +110,41 @@ func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
 	go sess.listenSSH()
 	return nil
 }
-
+func (sess *Session) getOutgoingSeq() uint32 {
+	sess.lock.Lock()
+	defer sess.lock.Unlock()
+	seq := sess.outgoingSeq
+	sess.outgoingSeq++
+	return seq
+}
+func (sess *Session) sendPacket(serialized []byte) {
+	for i := 0; i < len(sess.conns); i++ {
+		(*sess.conns[i].conn).Write(serialized)
+	}
+}
 func (sess *Session) listenSSH() error {
-	buf := make([]byte, BUF_SIZE)
 	for {
+		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
+			// TODO kill everything... if the ssh connection dies everything should die
 			return err
 		}
 		fmt.Println("Read", n, "bytes from ssh")
 		packet := packets.Packet{
 			Body: &packets.Packet_Data{
 				Data: &packets.Data{
-					SequenceID: uint32(420),
+					SequenceID: sess.getOutgoingSeq(),
 					Content:    buf[:n],
 				},
 			},
 		}
 		_ = packet.Body
+		serialized := []byte("this is the packet")
+		sess.sendPacket(serialized)
 	}
 }
-
-func (sess *Session) addConnAndListen(netconn *net.Conn) error {
+func (sess *Session) addConnAndListen(netconn *net.Conn) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	conn := &Connection{
@@ -134,7 +152,6 @@ func (sess *Session) addConnAndListen(netconn *net.Conn) error {
 	}
 	sess.conns = append(sess.conns, conn)
 	go connListen(sess, conn)
-	return nil
 }
 
 func (sess *Session) onReceiveData(sequenceID uint32, data []byte) error { return nil; }
