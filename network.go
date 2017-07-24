@@ -182,36 +182,6 @@ func (sess *Session) writeSSH(data []byte) {
 	fmt.Println("Sending", len(data), "bytes to ssh")
 	(*sess.sshConn).Write(data)
 }
-func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflight []uint32) {
-	fmt.Println("Received status", incomingSeq, timestamp, inflight)
-	sess.outgoingLock.Lock()
-	defer sess.outgoingLock.Unlock()
-	keys := make([]uint32, len(sess.outgoing)) // make a copy of the keys beacuse we're gonna modify the map
-	i := 0
-	for k := range sess.outgoing {
-		keys[i] = k
-		i++
-	}
-	fmt.Println("Current outgoing keys:", keys)
-	//only do a prune once we receive a status because that's the only time we get new info that lets us prune
-	for i = 0; i < len(keys); i++ {
-		if keys[i] < incomingSeq {
-			//remove everything in sess.outgoing with key less than incomingSeq
-			//because they've just told us that they've received and processed everything < incomingSeq.
-			delete(sess.outgoing, keys[i])
-		}
-	}
-
-	for j := 0; j < len(inflight); j++ { //also remove everything in inflight from sess.outgoing, because that's what they have received but not processed
-		_, ok := sess.outgoing[inflight[j]]
-		if ok {
-			fmt.Println("Inflight prune", inflight[j])
-		}
-		delete(sess.outgoing, inflight[j])
-	}
-
-	//MAYBE resend the gaps of inflight
-}
 
 func connListen(sess *Session, conn *Connection) error {
 	fmt.Println("Beginning conn listen")
