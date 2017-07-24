@@ -251,7 +251,7 @@ func (sess *Session) wrap(data []byte) []byte {
 		fmt.Println("Marshal error", packetErr)
 		return nil
 	}
-	if len(packetData) > 4294967296 {
+	if len(packetData) >= 4294967296 {
 		fmt.Println(errors.New("Packet was too big"))
 		return nil
 	}
