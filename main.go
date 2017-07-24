@@ -52,35 +52,40 @@ func Client(serverAddr string) error {
 }
 
 func SetupClient(sessionID SessionID, serverAddr string) error {
-	conn, err := net.Dial("tcp", serverAddr)
-	if err != nil {
-		return err
-	}
-	ClientCreateServerConnection(conn, sessionID) // would be DANK if it made connections over every available interface. No.
+	//conn, err := net.Dial("tcp", serverAddr)
+	//if err != nil {
+	//	return err
+	//}
+	//ClientCreateServerConnection(conn, sessionID) // would be DANK if it made connections over every available interface. No.
 	ifaces, ifaceErr := net.Interfaces()
 	if ifaceErr != nil {
 		return ifaceErr
 	}
 	for _, iface := range ifaces {
+		fmt.Println(iface.Name)
 		addrs, addrErr := iface.Addrs()
 		if addrErr != nil {
 			return addrErr
 		}
 		for _, addr := range addrs {
-			if addr.Network()[:3] != "tcp" {
-				continue
-			}
+			//if addr.Network()[:3] != "tcp" {
+			//	continue
+			//}
 			serverAddr, serverErr := net.ResolveTCPAddr("tcp", serverAddr)
 			if serverErr != nil {
 				return serverErr
 			}
 			fmt.Println("serverAddr: ", serverAddr)
-			localAddr, localErr := net.ResolveTCPAddr("tcp", addr.String())
+			ip, _, ipErr := net.ParseCIDR(addr.String())
+			if ipErr != nil {
+				return ipErr
+			}
+			localAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
 			if localErr != nil {
 				return localErr
 			}
 			fmt.Println("localAddr: ", localAddr)
-			conn, err = net.DialTCP("tcp", localAddr, serverAddr)
+			conn, err := net.DialTCP("tcp", localAddr, serverAddr)
 			if err != nil {
 				return err
 			}
