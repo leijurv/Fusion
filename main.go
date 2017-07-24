@@ -8,6 +8,7 @@ import (
 func main() {
 	fmt.Println("Hello!")
 	Client("localhost:5022")
+	//Server()
 }
 
 func Client(serverAddr string) error {
