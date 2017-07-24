@@ -65,12 +65,15 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 		for _, iface := range ifaces {
 			session := getSession(sessionID)
 			var active bool = false
+			session.lock.Lock()
 			for _, conn := range session.conns {
+				//				fmt.Println(conn.iface)
 				if iface.Name == conn.iface {
 					active = true
 					break
 				}
 			}
+			session.lock.Unlock()
 			if active {
 				continue
 			}
@@ -83,6 +86,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 				fmt.Println("serverAddr: ", serverAddr)
 				ip, _, ipErr := net.ParseCIDR(addr.String())
 				if ipErr != nil {
+					fmt.Println(ipErr)
 					continue
 				}
 				tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
@@ -90,18 +94,20 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 					continue
 				}
 				if localErr != nil {
+					fmt.Println(localErr)
 					continue
 				}
 				fmt.Println("tcpLocalAddr: ", tcpLocalAddr)
 				conn, err := net.DialTCP("tcp", tcpLocalAddr, tcpServerAddr)
 				if err != nil {
+					fmt.Println(err)
 					continue
 				}
 				connection := &Connection{
 					iface: iface.Name,
 					conn:  conn,
 				}
-				ClientCreateServerConnection(connection, sessionID) //this just makes two connections over the same interface (for testing)
+				fmt.Println(ClientCreateServerConnection(connection, sessionID)) //this just makes two connections over the same interface (for testing)
 			}
 		}
 		time.Sleep(time.Second * 1)
