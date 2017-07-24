@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
-
 	"github.com/howardstark/fusion/protos"
-	_ "github.com/howardstark/fusion/protos"
 )
 
 const (
@@ -127,7 +125,6 @@ func (sess *Session) sendPacket(serialized []byte) {
 func (sess *Session) listenSSH() error {
 	buf := make([]byte, BUF_SIZE)
 	for {
-
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
 			return err
