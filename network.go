@@ -7,8 +7,8 @@ import (
 	"net"
 	"sync"
 
-	_ "github.com/howardstark/fusion/protos"
 	"github.com/howardstark/fusion/protos"
+	_ "github.com/howardstark/fusion/protos"
 )
 
 const (
@@ -72,7 +72,7 @@ func ServerReceivedClientConnection(conn *net.Conn) error { //dont pass in ID, w
 	sess := getSession(SessionID(id))
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
-	if sess.sshConn == nil{
+	if sess.sshConn == nil {
 		//set ssh conn to a new one to localhost:22 if it's nil
 	}
 	return sess.addConnAndListen(conn)
