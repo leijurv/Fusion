@@ -203,16 +203,15 @@ func (sess *Session) listenSSH() error {
 		packets[parts] = sess.wrap(tmp)
 		totalSize += len(tmp)
 		if len(buf) != totalSize {
-
 			fmt.Println("Expected len ", len(buf), "got", totalSize, "packetslen", len(packets))
 			panic("")
 		}
-		
+
 		rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano()))
-		for len(packets) > 0 {
-			i := rSrc.Intn(len(packets))
-			sess.sendPacket(packets[i])
-			packets = append(packets[:i], packets[i+1:]...)
+		perm := rSrc.Perm(len(packets))
+		for i := 0; i < len(perm); i++ {
+			sess.sendPacket(packets[perm[i]])
+			packets = append(packets[:perm[i]], packets[perm[i]+1:]...)
 		}
 	}
 }
