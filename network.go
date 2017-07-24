@@ -193,6 +193,9 @@ func (sess *Session) listenSSH() error {
 				sess.sendPacket(packets[perm[i]])
 			}
 		}
+		if n < BUF_SIZE/5 {
+			time.Sleep(10 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
+		}
 	}
 }
 
