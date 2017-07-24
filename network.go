@@ -79,7 +79,8 @@ func ServerReceivedClientConnection(conn *net.Conn) error {
 		sess.sshConn = &conn
 		go sess.listenSSH()
 	}
-	return sess.addConnAndListen(conn)
+	sess.addConnAndListen(conn)
+	return nil
 }
 
 func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
@@ -93,7 +94,8 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	if !ok {
 		return errors.New("we dont have a ssh connection for this session id what are you even doing bro lol")
 	}
-	return sess.addConnAndListen(conn)
+	sess.addConnAndListen(conn)
+	return nil
 }
 
 func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
@@ -143,7 +145,7 @@ func (sess *Session) listenSSH() error {
 		sess.sendPacket(serialized)
 	}
 }
-func (sess *Session) addConnAndListen(netconn *net.Conn) error {
+func (sess *Session) addConnAndListen(netconn *net.Conn) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	conn := &Connection{
@@ -151,7 +153,6 @@ func (sess *Session) addConnAndListen(netconn *net.Conn) error {
 	}
 	sess.conns = append(sess.conns, conn)
 	go connListen(sess, conn)
-	return nil
 }
 func connListen(sess *Session, conn *Connection) error {
 	return nil
