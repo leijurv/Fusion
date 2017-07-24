@@ -31,7 +31,7 @@ func main() {
 }
 
 func Client(serverAddr string) error {
-	fmt.Println("del cliento")
+	fmt.Println("Starting client...")
 	ln, err := net.Listen("tcp", ":5021")
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func Client(serverAddr string) error {
 }
 
 func Server() error {
-	fmt.Println("el servo")
+	fmt.Println("Starting server...")
 	ln, err := net.Listen("tcp", ":5022")
 	if err != nil {
 		return err
