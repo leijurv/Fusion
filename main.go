@@ -19,7 +19,7 @@ func Client(serverAddr string) error {
 		if err != nil {
 			return err
 		}
-		go ClientReceivedSSHConnection(&conn, serverAddr)
+		go ClientReceivedSSHConnection(conn, serverAddr)
 	}
 }
 
@@ -33,6 +33,6 @@ func Server() error {
 		if err != nil {
 			return err
 		}
-		go ServerReceivedClientConnection(&conn)
+		go ServerReceivedClientConnection(conn)
 	}
 }
