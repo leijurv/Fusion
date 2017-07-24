@@ -11,6 +11,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
+	mrand "math/rand"
+	"time"
 )
 
 const (
@@ -205,9 +207,10 @@ func (sess *Session) listenSSH() error {
 			fmt.Println("Expected len ", len(buf), "got", totalSize, "packetslen", len(packets))
 			panic("")
 		}
-
+		
+		rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 		for len(packets) > 0 {
-			i := uint64(NewSessionID()) % uint64(len(packets))
+			i := rSrc.Intn(len(packets))
 			sess.sendPacket(packets[i])
 			packets = append(packets[:i], packets[i+1:]...)
 		}
@@ -301,7 +304,7 @@ func connListen(sess *Session, conn *Connection) error {
 		}
 		switch packet.GetBody().(type) {
 		case *packets.Packet_Data:
-			sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().Content)
+			sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().GetContent())
 		}
 	}
 }
@@ -322,13 +325,4 @@ func readProtoPacket(conn *Connection) (packets.Packet, error) {
 	}
 	unmarshErr := proto.Unmarshal(packetData, &packet)
 	return packet, unmarshErr
-}
-func Uvarint(buf []byte) (x uint64) {
-	for i, b := range buf {
-		x = x<<8 + uint64(b)
-		if i == 7 {
-			return
-		}
-	}
-	return
 }
