@@ -158,9 +158,11 @@ func (sess *Session) listenSSH() error {
 				},
 			},
 		}
-		_ = packet.Body
-		serialized := []byte("this is the packet")
-		sess.sendPacket(serialized)
+		packetData, packetErr := proto.Marshal(packet)
+		if packetErr != nil {
+			return errors.New("Run.")
+		}
+		sess.sendPacket(packetData)
 	}
 }
 func (sess *Session) addConnAndListen(netconn *net.Conn) {
