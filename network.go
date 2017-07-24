@@ -35,8 +35,11 @@ type Session struct {
 	outgoingSeq uint32
 }
 
-var sessions map[SessionID]*Session = make(map[SessionID]*Session)
 var sessionsLock sync.Mutex
+
+var (
+	sessions = make(map[SessionID]*Session)
+)
 
 func NewSessionID() SessionID {
 	b := make([]byte, 8)
@@ -70,6 +73,7 @@ func newSession() *Session {
 	_, ok := sessions[ID]
 	if ok {
 		//omfg collision??
+		// TODO: Check for collisions since they are much more likely given the nature of our random number generator
 		fmt.Println("Session id collision detected at id: ", ID)
 		return newSession() //recursion solves everything
 	}
@@ -94,7 +98,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 		fmt.Println("Server making new ssh connection for session id", id)
 		sshConn, err := net.Dial("tcp", "localhost:1234")
 		if err != nil {
-			fmt.Println("localhost dial err",err)
+			fmt.Println("localhost dial err", err)
 			return err
 		}
 		sess.sshConn = &sshConn
@@ -158,7 +162,7 @@ func (sess *Session) kill() {
 	delete(sessions, sess.sessionID)
 }
 func (sess *Session) sendPacket(serialized []byte) {
-	fmt.Println("Sending out packet",len(sess.conns))
+	fmt.Println("Sending out packet", len(sess.conns))
 	for i := 0; i < len(sess.conns); i++ {
 		fmt.Println("Writing")
 		sess.conns[i].conn.Write(serialized)
@@ -170,7 +174,7 @@ func (sess *Session) listenSSH() error {
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
-			fmt.Println("Read errrr",err)
+			fmt.Println("Read errrr", err)
 			go sess.kill()
 			return err
 		}
@@ -187,7 +191,7 @@ func (sess *Session) listenSSH() error {
 		packetData, packetErr := proto.Marshal(&packet)
 		fmt.Println("Marshal")
 		if packetErr != nil {
-			fmt.Println("Marshal error",packetErr)
+			fmt.Println("Marshal error", packetErr)
 			return errors.New("Run.")
 		}
 		fmt.Println("Done marshal")
@@ -216,10 +220,10 @@ func connListen(sess *Session, conn *Connection) error {
 		packet, packetErr := readProtoPacket(conn)
 		fmt.Println("Got packet...")
 		if packetErr != nil {
-			fmt.Println("Read err",packetErr)
+			fmt.Println("Read err", packetErr)
 			return packetErr
 		}
-		fmt.Println("Received packet",packet.GetBody())
+		fmt.Println("Received packet", packet.GetBody())
 		switch packet.GetBody().(type) {
 		case *packets.Packet_Data:
 			sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().Content)
@@ -234,8 +238,8 @@ func readProtoPacket(conn *Connection) (packets.Packet, error) {
 	if lenErr != nil {
 		return packet, lenErr
 	}
-	l:=binary.BigEndian.Uint16(packetLen)
-	fmt.Println("Reading packet of length",l)
+	l := binary.BigEndian.Uint16(packetLen)
+	fmt.Println("Reading packet of length", l)
 	packetData := make([]byte, l)
 	_, dataErr := io.ReadFull(conn.conn, packetData)
 	if dataErr != nil {
