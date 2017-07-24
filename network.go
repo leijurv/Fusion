@@ -96,14 +96,16 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
 		fmt.Println("Server making new ssh connection for session id", id)
-		sshConn, err := net.Dial("tcp", "localhost:22")
+		sshConn, err := net.Dial("tcp", "localhost:1234")
 		if err != nil {
+			fmt.Println("localhost dial err", err)
 			return err
 		}
 		sess.sshConn = &sshConn
 		go sess.listenSSH()
 	}
-	sess.addConnAndListen(conn)
+	fmt.Println("Adding")
+	go sess.addConnAndListen(conn)
 	return nil
 }
 
@@ -160,7 +162,9 @@ func (sess *Session) kill() {
 	delete(sessions, sess.sessionID)
 }
 func (sess *Session) sendPacket(serialized []byte) {
+	fmt.Println("Sending out packet", len(sess.conns))
 	for i := 0; i < len(sess.conns); i++ {
+		fmt.Println("Writing")
 		sess.conns[i].conn.Write(serialized)
 	}
 }
@@ -170,6 +174,7 @@ func (sess *Session) listenSSH() error {
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
+			fmt.Println("Read errrr", err)
 			go sess.kill()
 			return err
 		}
@@ -182,11 +187,15 @@ func (sess *Session) listenSSH() error {
 				},
 			},
 		}
+		fmt.Println("Constructed")
 		packetData, packetErr := proto.Marshal(&packet)
+		fmt.Println("Marshal")
 		if packetErr != nil {
+			fmt.Println("Marshal error", packetErr)
 			return errors.New("Run.")
 		}
 		packetData = append(packetData, [2]byte(len(packetData))...)
+		fmt.Println("Done marshal")
 		sess.sendPacket(packetData)
 	}
 }
@@ -206,11 +215,16 @@ func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
 }
 
 func connListen(sess *Session, conn *Connection) error {
+	fmt.Println("Beginning conn listen")
 	for {
+		fmt.Println("Waiting for packet...")
 		packet, packetErr := readProtoPacket(conn)
+		fmt.Println("Got packet...")
 		if packetErr != nil {
+			fmt.Println("Read err", packetErr)
 			return packetErr
 		}
+		fmt.Println("Received packet", packet.GetBody())
 		switch packet.GetBody().(type) {
 		case *packets.Packet_Data:
 			sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().Content)
@@ -225,7 +239,9 @@ func readProtoPacket(conn *Connection) (packets.Packet, error) {
 	if lenErr != nil {
 		return packet, lenErr
 	}
-	packetData := make([]byte, binary.BigEndian.Uint16(packetLen))
+	l := binary.BigEndian.Uint16(packetLen)
+	fmt.Println("Reading packet of length", l)
+	packetData := make([]byte, l)
 	_, dataErr := io.ReadFull(conn.conn, packetData)
 	if dataErr != nil {
 		return packet, dataErr
