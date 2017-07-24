@@ -4,10 +4,17 @@ package packets;
 message Packet {
   oneof body {
     Data data = 1;
+    Status status = 2;
   }
 }
 
 message Data {
   uint32 sequenceID = 1;
   bytes content = 2;
+}
+
+message Status {
+	int64 timestamp = 1;
+	uint32 incomingSeq = 2;
+	repeated uint32 inflight = 3;
 }

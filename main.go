@@ -41,8 +41,28 @@ func Client(serverAddr string) error {
 		if err != nil {
 			return err
 		}
-		go ClientReceivedSSHConnection(conn, serverAddr)
+		go func() {
+			sessionID := ClientReceivedSSHConnection(conn)
+			err := SetupClient(sessionID, serverAddr)
+			if err != nil {
+				fmt.Println("Error with", conn, err)
+			}
+		}()
 	}
+}
+
+func SetupClient(sessionID SessionID, serverAddr string) error {
+	conn, err := net.Dial("tcp", serverAddr)
+	if err != nil {
+		return err
+	}
+	ClientCreateServerConnection(conn, sessionID) //this just makes two connections over the same interface (for testing)
+	conn, err = net.Dial("tcp", serverAddr)
+	if err != nil {
+		return err
+	}
+	ClientCreateServerConnection(conn, sessionID) //would be DANK if it made connections over every available interface
+	return nil
 }
 
 func Server() error {
@@ -56,6 +76,11 @@ func Server() error {
 		if err != nil {
 			return err
 		}
-		go ServerReceivedClientConnection(conn)
+		go func() {
+			err := ServerReceivedClientConnection(conn)
+			if err != nil {
+				fmt.Println("Error with", conn, err)
+			}
+		}()
 	}
 }
