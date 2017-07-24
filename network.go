@@ -125,10 +125,11 @@ func (sess *Session) sendPacket(serialized []byte) {
 	}
 }
 func (sess *Session) listenSSH() error {
-	buf := make([]byte, BUF_SIZE)
 	for {
+		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
+			// TODO kill everything... if the ssh connection dies everything should die
 			return err
 		}
 		fmt.Println("Read", n, "bytes from ssh")
