@@ -68,11 +68,13 @@ func ServerReceivedClientConnection(conn *net.Conn) error { //dont pass in ID, w
 	if err != nil {
 		return err
 	}
-	//get session
-	//set ssh conn to a new one to localhost:22 if it's nil
-	//add this connection
-	//start listening
-	return nil
+	sess := getSession(SessionID(id))
+	sess.lock.Lock()
+	defer sess.lock.Unlock()
+	if sess.sshConn == nil{
+		//set ssh conn to a new one to localhost:22 if it's nil
+	}
+	return sess.addConnAndListen(conn)
 }
 
 func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
@@ -89,7 +91,7 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	return sess.addConnAndListen(conn)
 }
 
-func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error { //idk how to pass in server addr
+func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
 	sess := newSession()
 	sess.sshConn = ssh
 
