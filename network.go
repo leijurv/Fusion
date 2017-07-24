@@ -89,7 +89,7 @@ func (sess *Session) sendPacket(serialized []byte) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(sess.conns))
-	fmt.Println("Selected conn index", ind, sess.conns[ind].LocalAddr(), sess.conns[ind].RemoteAddr())
+	fmt.Println("Selected conn index", ind, sess.conns[ind].conn.LocalAddr(), sess.conns[ind].conn.RemoteAddr())
 	connSelection := sess.conns[ind].conn // do this step in lock
 	go connSelection.Write(serialized)    // haha yes
 	// do actual write outside of lock
