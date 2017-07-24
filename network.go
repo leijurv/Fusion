@@ -35,8 +35,11 @@ type Session struct {
 	outgoingSeq uint32
 }
 
-var sessions map[SessionID]*Session
 var sessionsLock sync.Mutex
+
+var (
+	sessions = make(map[SessionID]*Session)
+)
 
 func NewSessionID() SessionID {
 	b := make([]byte, 8)
