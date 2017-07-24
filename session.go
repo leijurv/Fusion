@@ -188,6 +188,16 @@ func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
 	sess.inflight[sequenceID] = &data
 	sess.checkInflight()
 }
+func (conn *Connection) stillActiveIn(sess *Session) bool {
+	sess.lock.Lock()
+	defer sess.lock.Unlock()
+	for i := 0; i < len(sess.conns); i++ {
+		if sess.conns[i] == conn {
+			return true
+		}
+	}
+	return false
+}
 func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflight []uint32) {
 	fmt.Println("Received status", incomingSeq, timestamp, inflight)
 	maxReceived := uint32(0)
@@ -237,6 +247,17 @@ func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflig
 			break
 		}
 		diff := time.Now().UnixNano() - sent.date
-		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq,	"\n\n\n\n\n")
+		stillActive := false
+		for _, conn := range sent.sentOn {
+			if conn.stillActiveIn(sess) {
+				stillActive = true
+			}
+		}
+		//stillActive = false means it almost certainly isn't still in transit; the connection is just closed
+		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq, stillActive, "\n\n\n\n\n")
+		if !stillActive {
+			sess.sendPacket(sent)
+		}
+
 	}
 }
