@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
 )
 
@@ -157,6 +157,33 @@ func (sess *Session) addConnAndListen(netconn *net.Conn) {
 	sess.conns = append(sess.conns, conn)
 	go connListen(sess, conn)
 }
+
+func (sess *Session) onReceiveData(sequenceID uint32, data []byte) error { return nil; }
+
 func connListen(sess *Session, conn *Connection) error {
+	packet, packetErr := readProtoPacket(conn)
+	if packetErr != nil {
+		return packetErr
+	}
+	switch packet.GetBody().(type) {
+	case *packets.Packet_Data:
+		sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().Content)
+	}
 	return nil
+}
+
+func readProtoPacket(conn *Connection) (packets.Packet, error) {
+	var packet packets.Packet
+	packetLen := make([]byte, 2)
+	_, lenErr := (*conn.conn).Read(packetLen)
+	if lenErr != nil {
+		return packet, lenErr
+	}
+	packetData := make([]byte, binary.BigEndian.Uint16(packetLen))
+	_, dataErr := (*conn.conn).Read(packetData)
+	if dataErr != nil {
+		return packet, dataErr
+	}
+	unmarshErr := proto.Unmarshal(packetData, &packet)
+	return packet, unmarshErr
 }
