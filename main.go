@@ -65,6 +65,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 		for _, iface := range ifaces {
 			session := getSession(sessionID)
 			var active bool = false
+			session.lock.Lock()
 			for _, conn := range session.conns {
 				fmt.Println(conn.iface)
 				if iface.Name == conn.iface {
@@ -72,9 +73,9 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 					break
 				}
 			}
+			session.lock.Unlock()
 			if active {
 				continue
-				fmt.Println("UUUUUUUUUHHHHHHHHHHHHHHH OHHHHHHHHHHHHH WEEEEEEE'REEEEEEE CONTIIINUUUUUUUIIINGGGGGGGGGGG")
 			}
 			addrs, addrErr := iface.Addrs()
 			if addrErr != nil {
