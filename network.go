@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
 	_ "github.com/howardstark/fusion/protos"
 )
 
