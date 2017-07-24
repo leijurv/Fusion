@@ -10,6 +10,8 @@ import (
 	"crypto/rand"
 	"io"
 
+	"bytes"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
 )
@@ -19,14 +21,6 @@ const (
 )
 
 type SessionID uint64
-
-func NewSessionID() SessionID {
-	b := make([]byte, 8)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return SessionID(420) // Sensible defaults amirite?
-	}
-	return SessionID(b)
-}
 
 type Connection struct {
 	conn                       net.Conn
@@ -43,6 +37,18 @@ type Session struct {
 
 var sessions map[SessionID]*Session
 var sessionsLock sync.Mutex
+
+func NewSessionID() SessionID {
+	b := make([]byte, 8)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return SessionID(420) // Sensible defaults amirite?
+	}
+	id, idErr := binary.ReadUvarint(bytes.NewReader(b))
+	if idErr != nil {
+		return SessionID(69)
+	}
+	return SessionID(id)
+}
 
 func getSession(id SessionID) *Session {
 	sessionsLock.Lock()
@@ -172,7 +178,7 @@ func (sess *Session) listenSSH() error {
 				},
 			},
 		}
-		packetData, packetErr := proto.Marshal(packet)
+		packetData, packetErr := proto.Marshal(&packet)
 		if packetErr != nil {
 			return errors.New("Run.")
 		}
@@ -221,4 +227,13 @@ func readProtoPacket(conn *Connection) (packets.Packet, error) {
 	}
 	unmarshErr := proto.Unmarshal(packetData, &packet)
 	return packet, unmarshErr
+}
+func Uvarint(buf []byte) (x uint64) {
+	for i, b := range buf {
+		x = x<<8 + uint64(b)
+		if i == 7 {
+			return
+		}
+	}
+	return
 }
