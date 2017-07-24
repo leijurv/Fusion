@@ -23,7 +23,10 @@ func main() {
 			panic(err)
 		}
 	} else {
-		Server()
+		err := Server()
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
