@@ -80,7 +80,7 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 		return err
 	}
 	fmt.Println("Client creating new server conn for session id", id, "and", conn.conn)
-	sess.addConnAndListen(conn.conn)
+	sess.addConnAndListen(conn)
 	return nil
 }
 
