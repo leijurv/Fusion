@@ -80,14 +80,18 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	return sess.addConnAndListen(conn)
 }
 
-func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) { //idk how to pass in server addr
+func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error { //idk how to pass in server addr
 	sess := newSession()
 	sess.sshConn = ssh
 
-	//make a connection to server
-	//go listen
-	go sess.listenSSH()
+	conn, err := net.Dial("tcp", serverAddr)
+	if err != nil {
+		return err
+	}
+	sess.addConnAndListen(&conn)
 
+	go sess.listenSSH()
+	return nil
 }
 
 func (sess *Session) listenSSH() error {
