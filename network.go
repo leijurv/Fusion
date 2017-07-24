@@ -45,6 +45,7 @@ func getSession(id SessionID) *Session {
 	}
 	return sess
 }
+
 func newSession() *Session {
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
@@ -61,6 +62,7 @@ func newSession() *Session {
 	sessions[ID] = sess
 	return sess
 }
+
 func ServerReceivedClientConnection(conn *net.Conn) error {
 	var id int64
 	err := binary.Read(*conn, binary.LittleEndian, &id)
@@ -115,6 +117,7 @@ func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
 	go sess.listenSSH()
 	return nil
 }
+
 func (sess *Session) getOutgoingSeq() uint32 {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
@@ -122,11 +125,13 @@ func (sess *Session) getOutgoingSeq() uint32 {
 	sess.outgoingSeq++
 	return seq
 }
+
 func (sess *Session) sendPacket(serialized []byte) {
 	for i := 0; i < len(sess.conns); i++ {
 		(*sess.conns[i].conn).Write(serialized)
 	}
 }
+
 func (sess *Session) listenSSH() error {
 	for {
 		buf := make([]byte, BUF_SIZE)
