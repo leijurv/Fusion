@@ -30,9 +30,9 @@ func dedup(packet packets.Packet, rawPacket []byte) bool {
 	if !shouldDedup(packet) {
 		return false
 	}
+	hash := sha256.Sum256(rawPacket)
 	packetDedupLock.Lock()
 	defer packetDedupLock.Unlock()
-	hash := sha256.Sum256(rawPacket)
 	_, ok := packetDedup[hash]
 	if ok {
 		fmt.Println("Ignoring already received packet with hash", hash)
