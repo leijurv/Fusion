@@ -68,10 +68,12 @@ func ServerReceivedClientConnection(conn *net.Conn) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("Server received connection", conn, " for session id", id, " and ", *conn)
 	sess := getSession(SessionID(id))
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
+		fmt.Println("Server making new sshConn for session id", id)
 		conn, err := net.Dial("tcp", "localhost:22")
 		if err != nil {
 			return err
@@ -94,12 +96,14 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	if !ok {
 		return errors.New("we dont have a ssh connection for this session id what are you even doing bro lol")
 	}
+	fmt.Println("Client creating new server conn for session id", id, "and", conn, "and", *conn)
 	sess.addConnAndListen(conn)
 	return nil
 }
 
 func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
 	sess := newSession()
+	fmt.Println("Client received new ssh conn ", ssh, "and", *ssh, " and gave it id ", sess.sessionID)
 	sess.sshConn = ssh
 
 	conn, err := net.Dial("tcp", serverAddr)
