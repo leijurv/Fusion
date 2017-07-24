@@ -17,6 +17,7 @@ const (
 )
 
 type Connection struct {
+	iface                      string
 	conn                       net.Conn
 	lastSuccessfulDataTransfer uint64 //idk more fields here
 }
@@ -50,13 +51,13 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	return nil
 }
 
-func ClientCreateServerConnection(conn net.Conn, id SessionID) error {
-	err := binary.Write(conn, binary.LittleEndian, uint64(id))
+func ClientCreateServerConnection(conn *Connection, id SessionID) error {
+	err := binary.Write(conn.conn, binary.LittleEndian, uint64(id))
 	if err != nil {
 		return err
 	}
 	var verify uint64
-	err = binary.Read(conn, binary.BigEndian, &verify) // verifies that proper 2-way communication is happening before adding to list of conns
+	err = binary.Read(conn.conn, binary.BigEndian, &verify) // verifies that proper 2-way communication is happening before adding to list of conns
 	if err != nil {
 		return err
 	}
@@ -73,10 +74,11 @@ func ClientCreateServerConnection(conn net.Conn, id SessionID) error {
 		fmt.Println(err)
 		return err
 	}
-	fmt.Println("Client creating new server conn for session id", id, "and", conn)
-	sess.addConnAndListen(conn)
+	fmt.Println("Client creating new server conn for session id", id, "and", conn.conn)
+	sess.addConnAndListen(conn.conn)
 	return nil
 }
+
 func ClientReceivedSSHConnection(ssh net.Conn) SessionID {
 	sess := newSession()
 	fmt.Println("Client received new ssh conn", ssh, "and gave it id ", sess.sessionID)

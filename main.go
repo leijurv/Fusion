@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"time"
 )
 
 var flagListenMode bool
@@ -43,7 +44,7 @@ func Client(serverAddr string) error {
 		}
 		go func() {
 			sessionID := ClientReceivedSSHConnection(conn)
-			err := SetupClient(sessionID, serverAddr)
+			err := SetupInterfaces(sessionID, serverAddr)
 			if err != nil {
 				fmt.Println("SEARCHFORME Error with", conn, err)
 			}
@@ -51,54 +52,60 @@ func Client(serverAddr string) error {
 	}
 }
 
-func SetupClient(sessionID SessionID, serverAddr string) error {
-	//conn, err := net.Dial("tcp", serverAddr)
-	//if err != nil {
-	//		return err
-	//	}
-	//ClientCreateServerConnection(conn, sessionID) // would be DANK if it made connections over every available interface. No.
-	ifaces, ifaceErr := net.Interfaces()
-	if ifaceErr != nil {
-		return ifaceErr
-	}
-	for _, iface := range ifaces {
-		fmt.Println(iface.Name)
-		addrs, addrErr := iface.Addrs()
-		if addrErr != nil {
-			return addrErr
+func SetupInterfaces(sessionID SessionID, serverAddr string) error {
+	for {
+		ifaces, ifaceErr := net.Interfaces()
+		if ifaceErr != nil {
+			return ifaceErr
 		}
-		for _, addr := range addrs {
-			fmt.Println("ATTEMPTING", iface, addr)
-			serverAddr, serverErr := net.ResolveTCPAddr("tcp", serverAddr)
-			if serverErr != nil {
-				continue
-				//return serverErr
-			}
-			fmt.Println("serverAddr: ", serverAddr)
-			ip, _, ipErr := net.ParseCIDR(addr.String())
-			if ipErr != nil {
-				continue
-				//return ipErr
-			}
-			localAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
-			if ip.IsLinkLocalMulticast() {
-				continue
-			}
-			if localErr != nil {
-				continue
-				//return localErr
-			}
-			fmt.Println("localAddr: ", localAddr)
-			conn, err := net.DialTCP("tcp", localAddr, serverAddr)
-			if err != nil {
-				continue
-				//return err
-			}
-			ClientCreateServerConnection(conn, sessionID) //this just makes two connections over the same interface (for testing)
-			//break
+		tcpServerAddr, serverErr := net.ResolveTCPAddr("tcp", serverAddr)
+		if serverErr != nil {
+			return serverErr
 		}
+		for _, iface := range ifaces {
+			session := getSession(sessionID)
+			var active bool = false
+			for _, conn := range session.conns {
+				if iface.Name == conn.iface {
+					active = true
+					break
+				}
+			}
+			if active {
+				continue
+			}
+			addrs, addrErr := iface.Addrs()
+			if addrErr != nil {
+				return addrErr
+			}
+			for _, addr := range addrs {
+				fmt.Println("ATTEMPTING", iface, addr)
+				fmt.Println("serverAddr: ", serverAddr)
+				ip, _, ipErr := net.ParseCIDR(addr.String())
+				if ipErr != nil {
+					continue
+				}
+				tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
+				if ip.IsLinkLocalMulticast() {
+					continue
+				}
+				if localErr != nil {
+					continue
+				}
+				fmt.Println("tcpLocalAddr: ", tcpLocalAddr)
+				conn, err := net.DialTCP("tcp", tcpLocalAddr, tcpServerAddr)
+				if err != nil {
+					continue
+				}
+				connection := &Connection{
+					iface: iface.Name,
+					conn:  conn,
+				}
+				ClientCreateServerConnection(connection, sessionID) //this just makes two connections over the same interface (for testing)
+			}
+		}
+		time.Sleep(time.Second * 1)
 	}
-	return nil
 }
 
 func Server() error {
