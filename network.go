@@ -108,7 +108,7 @@ func (sess *Session) listenSSH() error {
 				},
 			},
 		}
-		packet.GetData()
+		_ := packet
 	}
 }
 func (sess *Session) addConnAndListen(netconn *net.Conn) error {
