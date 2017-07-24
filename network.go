@@ -9,10 +9,11 @@ import (
 	"net"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/howardstark/fusion/protos"
 	mrand "math/rand"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/howardstark/fusion/protos"
 )
 
 const (
@@ -87,12 +88,16 @@ func newSession() *Session {
 }
 
 func ServerReceivedClientConnection(conn net.Conn) error {
-	var id int64
+	var id uint64
 	err := binary.Read(conn, binary.LittleEndian, &id)
 	if err != nil {
 		return err
 	}
 	fmt.Println("Server received connection", conn, " for session id", id)
+	err = binary.Write(conn, binary.BigEndian, id) //big endian prevents simple reflection
+	if err != nil {
+		return err
+	}
 	sess := getSession(SessionID(id))
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
@@ -116,11 +121,23 @@ func ClientCreateServerConnection(conn net.Conn, id SessionID) error {
 	if err != nil {
 		return err
 	}
+	var verify uint64
+	err = binary.Read(conn, binary.BigEndian, &verify) // verifies that proper 2-way communication is happening before adding to list of conns
+	if err != nil {
+		return err
+	}
+	if verify != uint64(id) {
+		err = errors.New("ID response mismatch " + string(verify) + "  " + string(id))
+		fmt.Println(err)
+		return err
+	}
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
 	sess, ok := sessions[id]
 	if !ok {
-		return errors.New("Existing ssh conn for id '" + string(id) + "' not found...")
+		err = errors.New("Existing ssh conn for id '" + string(id) + "' not found...")
+		fmt.Println(err)
+		return err
 	}
 	fmt.Println("Client creating new server conn for session id", id, "and", conn)
 	sess.addConnAndListen(conn)
@@ -172,6 +189,7 @@ func (sess *Session) sendPacket(serialized []byte) {
 }
 
 func (sess *Session) listenSSH() error {
+	// TODO wait until sess.conns isn't empty
 	for {
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
