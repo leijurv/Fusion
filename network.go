@@ -62,7 +62,7 @@ func newSession() *Session {
 	_, ok := sessions[ID]
 	if ok {
 		//omfg collision??
-		fmt.Println("COLLISSIONOSNEUHSEIOT")
+		fmt.Println("Session id collision detected at id: ", ID)
 		return newSession() //recursion solves everything
 	}
 	sess := &Session{
@@ -83,7 +83,7 @@ func ServerReceivedClientConnection(conn *net.Conn) error {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
-		fmt.Println("Server making new sshConn for session id", id)
+		fmt.Println("Server making new ssh connection for session id", id)
 		conn, err := net.Dial("tcp", "localhost:22")
 		if err != nil {
 			return err
@@ -104,7 +104,7 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 	defer sessionsLock.Unlock()
 	sess, ok := sessions[id]
 	if !ok {
-		return errors.New("we dont have a ssh connection for this session id what are you even doing bro lol")
+		return errors.New("Existing ssh conn for id '" + string(id) + "' not found...")
 	}
 	fmt.Println("Client creating new server conn for session id", id, "and", conn, "and", *conn)
 	sess.addConnAndListen(conn)
@@ -113,7 +113,7 @@ func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
 
 func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error {
 	sess := newSession()
-	fmt.Println("Client received new ssh conn ", ssh, "and", *ssh, " and gave it id ", sess.sessionID)
+	fmt.Println("Client received new ssh conn", ssh, "and", *ssh, " and gave it id ", sess.sessionID)
 	sess.sshConn = ssh
 
 	conn, err := net.Dial("tcp", serverAddr)
