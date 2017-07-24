@@ -8,12 +8,9 @@ import (
 var flagListenMode bool
 var flagAddress string
 
-func init() {
-	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
-	flag.StringVar(&flagAddress, "address", "127.0.0.1", "Address of the server")
-}
-
 func main() {
+	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
+	flag.StringVar(&flagAddress, "address", "127.0.0.1:5022", "Address of the server")
 	if(!flagListenMode) {
 		err := Client(flagAddress)
 		if err != nil {
