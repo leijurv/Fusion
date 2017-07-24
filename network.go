@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"github.com/howardstark/fusion/protos"
+	_ "github.com/howardstark/fusion/protos"
 )
 
 const (
