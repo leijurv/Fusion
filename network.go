@@ -7,11 +7,13 @@ import (
 	"net"
 	"sync"
 
+	"crypto/rand"
+	"io"
+
+	"bytes"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
-	"io"
-	"crypto/rand"
-	"bytes"
 )
 
 const (
@@ -47,7 +49,6 @@ func NewSessionID() SessionID {
 	}
 	return SessionID(id)
 }
-
 
 func getSession(id SessionID) *Session {
 	sessionsLock.Lock()
@@ -135,14 +136,26 @@ func ClientReceivedSSHConnection(ssh net.Conn, serverAddr string) error {
 	return nil
 }
 
-func (sess *Session) getOutgoingSeq() uint32 {
+func (sess *Session) getOutgoingSeq() uint32 { // actually only one thread will be touching outgoingSeq, but still good practice =)))))
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	seq := sess.outgoingSeq
 	sess.outgoingSeq++
 	return seq
 }
-
+func (sess *Session) kill() {
+	sess.lock.Lock()
+	defer sess.lock.Unlock()
+	if sess.sshConn != nil {
+		(*sess.sshConn).Close()
+	}
+	for i := 0; i < len(sess.conns); i++ {
+		sess.conns[i].conn.Close()
+	}
+	sessionsLock.Lock()
+	defer sessionsLock.Unlock()
+	delete(sessions, sess.sessionID)
+}
 func (sess *Session) sendPacket(serialized []byte) {
 	for i := 0; i < len(sess.conns); i++ {
 		sess.conns[i].conn.Write(serialized)
@@ -154,7 +167,7 @@ func (sess *Session) listenSSH() error {
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
-			// TODO kill everything... if the ssh connection dies everything should die
+			go sess.kill()
 			return err
 		}
 		fmt.Println("Read", n, "bytes from ssh")
@@ -184,7 +197,7 @@ func (sess *Session) addConnAndListen(netconn net.Conn) {
 }
 
 func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
-	fmt.Println("Sending",len(data),"bytes to ssh")
+	fmt.Println("Sending", len(data), "bytes to ssh")
 	(*sess.sshConn).Write(data)
 }
 
@@ -209,7 +222,7 @@ func readProtoPacket(conn *Connection) (packets.Packet, error) {
 		return packet, lenErr
 	}
 	packetData := make([]byte, binary.BigEndian.Uint16(packetLen))
-	_, dataErr := io.ReadFull(*conn.conn, packetData)
+	_, dataErr := io.ReadFull(conn.conn, packetData)
 	if dataErr != nil {
 		return packet, dataErr
 	}
@@ -218,7 +231,7 @@ func readProtoPacket(conn *Connection) (packets.Packet, error) {
 }
 func Uvarint(buf []byte) (x uint64) {
 	for i, b := range buf {
-		x = x << 8 + uint64(b)
+		x = x<<8 + uint64(b)
 		if i == 7 {
 			return
 		}
