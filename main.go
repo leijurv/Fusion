@@ -67,7 +67,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 			var active bool = false
 			session.lock.Lock()
 			for _, conn := range session.conns {
-				fmt.Println(conn.iface)
+				//				fmt.Println(conn.iface)
 				if iface.Name == conn.iface {
 					active = true
 					break
@@ -107,7 +107,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 					iface: iface.Name,
 					conn:  conn,
 				}
-				ClientCreateServerConnection(connection, sessionID) //this just makes two connections over the same interface (for testing)
+				fmt.Println(ClientCreateServerConnection(connection, sessionID)) //this just makes two connections over the same interface (for testing)
 			}
 		}
 		time.Sleep(time.Second * 1)

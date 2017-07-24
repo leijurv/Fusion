@@ -47,7 +47,10 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 		go sess.listenSSH()
 	}
 	fmt.Println("Adding")
-	go sess.addConnAndListen(conn)
+	go func() {
+		fmt.Println("AAAAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHh")
+		sess.addConnAndListen(&Connection{conn: conn})
+	}()
 	return nil
 }
 
@@ -166,12 +169,9 @@ func (sess *Session) listenSSH() error {
 	}
 }
 
-func (sess *Session) addConnAndListen(netconn net.Conn) {
+func (sess *Session) addConnAndListen(conn *Connection) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
-	conn := &Connection{
-		conn: netconn,
-	}
 	sess.conns = append(sess.conns, conn)
 	go func() {
 		err := connListen(sess, conn)
