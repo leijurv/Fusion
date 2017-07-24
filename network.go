@@ -324,12 +324,3 @@ func readProtoPacket(conn *Connection) (packets.Packet, error) {
 	unmarshErr := proto.Unmarshal(packetData, &packet)
 	return packet, unmarshErr
 }
-func Uvarint(buf []byte) (x uint64) {
-	for i, b := range buf {
-		x = x<<8 + uint64(b)
-		if i == 7 {
-			return
-		}
-	}
-	return
-}
