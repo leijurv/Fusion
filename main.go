@@ -1,13 +1,27 @@
 package main
 
 import (
-	"fmt"
 	"net"
+	"flag"
 )
 
-func main() {
+var flagListenMode bool
+var flagAddress string
 
-	Client("localhost:5022")
+func init() {
+	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
+	flag.StringVar(&flagAddress, "address", "127.0.0.1", "Address of the server")
+}
+
+func main() {
+	if(!flagListenMode) {
+		err := Client(flagAddress)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		Server()
+	}
 }
 
 func Client(serverAddr string) error {
