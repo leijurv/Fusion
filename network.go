@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -61,16 +62,24 @@ func makeSession(id SessionID) *Session {
 	}
 }
 
-func ServerReceivedClientConnection(conn *net.Conn) { //dont pass in ID, we'll read it
-	//read ID
+func ServerReceivedClientConnection(conn *net.Conn) error { //dont pass in ID, we'll read it
+	var id int64
+	err := binary.Read(*conn, binary.LittleEndian, &id)
+	if err != nil {
+		return err
+	}
 	//get session
 	//set ssh conn to a new one to localhost:22 if it's nil
 	//add this connection
 	//start listening
+	return nil
 }
 
 func ClientCreateServerConnection(conn *net.Conn, id SessionID) error {
-	//conn.writeUint64(id)
+	err := binary.Write(*conn, binary.LittleEndian, uint64(id))
+	if err != nil {
+		return err
+	}
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
 	sess, ok := sessions[id]
@@ -88,7 +97,8 @@ func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error { //idk
 	if err != nil {
 		return err
 	}
-	sess.addConnAndListen(&conn)
+
+	ClientCreateServerConnection(&conn, sess.sessionID)
 
 	go sess.listenSSH()
 	return nil
