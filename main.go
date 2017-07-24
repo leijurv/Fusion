@@ -66,6 +66,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 			session := getSession(sessionID)
 			var active bool = false
 			for _, conn := range session.conns {
+				fmt.Println(conn.iface)
 				if iface.Name == conn.iface {
 					active = true
 					break
@@ -73,6 +74,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 			}
 			if active {
 				continue
+				fmt.Println("UUUUUUUUUHHHHHHHHHHHHHHH OHHHHHHHHHHHHH WEEEEEEE'REEEEEEE CONTIIINUUUUUUUIIINGGGGGGGGGGG")
 			}
 			addrs, addrErr := iface.Addrs()
 			if addrErr != nil {
@@ -83,6 +85,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 				fmt.Println("serverAddr: ", serverAddr)
 				ip, _, ipErr := net.ParseCIDR(addr.String())
 				if ipErr != nil {
+					fmt.Println(ipErr)
 					continue
 				}
 				tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
@@ -90,11 +93,13 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 					continue
 				}
 				if localErr != nil {
+					fmt.Println(localErr)
 					continue
 				}
 				fmt.Println("tcpLocalAddr: ", tcpLocalAddr)
 				conn, err := net.DialTCP("tcp", tcpLocalAddr, tcpServerAddr)
 				if err != nil {
+					fmt.Println(err)
 					continue
 				}
 				connection := &Connection{
