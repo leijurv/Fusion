@@ -253,14 +253,13 @@ func (sess *Session) addConnAndListen(netconn net.Conn) {
 }
 func (sess *Session) checkInflight() {
 	for {
-		seq := sess.incomingSeq
-		data, ok := sess.inflight[seq]
+		data, ok := sess.inflight[sess.incomingSeq]
 		if !ok {
-			fmt.Println("Still waiting on", seq)
+			fmt.Println("Still waiting on", sess.incomingSeq)
 			return
 		}
 		sess.writeSSH(*data)
-		delete(sess.inflight, seq)
+		delete(sess.inflight, sess.incomingSeq)
 		sess.incomingSeq++
 	}
 }
