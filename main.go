@@ -11,7 +11,7 @@ var flagAddress string
 
 func init() {
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
-	flag.StringVar(&flagAddress, "address", "127.0.0.1:5022", "Address of the server")
+	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
 }
 
 func main() {
