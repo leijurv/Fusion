@@ -7,10 +7,11 @@ import (
 	"net"
 	"sync"
 
+	"crypto/rand"
+	"io"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
-	"io"
-	"crypto/rand"
 )
 
 const (
@@ -128,14 +129,26 @@ func ClientReceivedSSHConnection(ssh net.Conn, serverAddr string) error {
 	return nil
 }
 
-func (sess *Session) getOutgoingSeq() uint32 {
+func (sess *Session) getOutgoingSeq() uint32 { // actually only one thread will be touching outgoingSeq, but still good practice =)))))
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	seq := sess.outgoingSeq
 	sess.outgoingSeq++
 	return seq
 }
-
+func (sess *Session) kill() {
+	sess.lock.Lock()
+	defer sess.lock.Unlock()
+	if sess.sshConn != nil {
+		(*sess.sshConn).Close()
+	}
+	for i := 0; i < len(sess.conns); i++ {
+		sess.conns[i].conn.Close()
+	}
+	sessionsLock.Lock()
+	defer sessionsLock.Unlock()
+	delete(sessions, sess.sessionID)
+}
 func (sess *Session) sendPacket(serialized []byte) {
 	for i := 0; i < len(sess.conns); i++ {
 		sess.conns[i].conn.Write(serialized)
@@ -147,7 +160,7 @@ func (sess *Session) listenSSH() error {
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
-			// TODO kill everything... if the ssh connection dies everything should die
+			go sess.kill()
 			return err
 		}
 		fmt.Println("Read", n, "bytes from ssh")
@@ -177,7 +190,7 @@ func (sess *Session) addConnAndListen(netconn net.Conn) {
 }
 
 func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
-	fmt.Println("Sending",len(data),"bytes to ssh")
+	fmt.Println("Sending", len(data), "bytes to ssh")
 	(*sess.sshConn).Write(data)
 }
 
