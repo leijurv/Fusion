@@ -1,9 +1,9 @@
 package main
 
 import (
-	"net"
 	"flag"
 	"fmt"
+	"net"
 )
 
 var flagListenMode bool
