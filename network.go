@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net"
 	"sync"
-
-	_ "github.com/howardstark/fusion/protos"
 	"github.com/howardstark/fusion/protos"
 )
 
@@ -108,7 +106,6 @@ func ClientReceivedSSHConnection(ssh *net.Conn, serverAddr string) error { //idk
 func (sess *Session) listenSSH() error {
 	buf := make([]byte, BUF_SIZE)
 	for {
-
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
 			return err
