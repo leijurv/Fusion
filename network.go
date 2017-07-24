@@ -194,7 +194,13 @@ func (sess *Session) listenSSH() error {
 			fmt.Println("Marshal error", packetErr)
 			return errors.New("Run.")
 		}
-		packetData = append(packetData, [2]byte(len(packetData))...)
+		if len(packetData) > 4294967296 {
+			return errors.New("Packet was too big")
+		}
+		packetLen := make([]byte, 4)
+		binary.BigEndian.PutUint16(packetLen, uint16(len(packetData)))
+		packetData = append(packetLen, packetData...)
+
 		fmt.Println("Done marshal")
 		sess.sendPacket(packetData)
 	}
