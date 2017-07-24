@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
 	"io"
@@ -175,18 +176,22 @@ func (sess *Session) addConnAndListen(netconn *net.Conn) {
 	go connListen(sess, conn)
 }
 
-func (sess *Session) onReceiveData(sequenceID uint32, data []byte) error { return nil; }
+func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
+	fmt.Println("Sending",len(data),"bytes to ssh")
+	(*sess.sshConn).Write(data)
+}
 
 func connListen(sess *Session, conn *Connection) error {
-	packet, packetErr := readProtoPacket(conn)
-	if packetErr != nil {
-		return packetErr
+	for {
+		packet, packetErr := readProtoPacket(conn)
+		if packetErr != nil {
+			return packetErr
+		}
+		switch packet.GetBody().(type) {
+		case *packets.Packet_Data:
+			sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().Content)
+		}
 	}
-	switch packet.GetBody().(type) {
-	case *packets.Packet_Data:
-		sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().Content)
-	}
-	return nil
 }
 
 func readProtoPacket(conn *Connection) (packets.Packet, error) {
