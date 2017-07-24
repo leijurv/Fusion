@@ -23,6 +23,7 @@ type Connection struct {
 }
 
 func ServerReceivedClientConnection(conn net.Conn) error {
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var id uint64
 	err := binary.Read(conn, binary.LittleEndian, &id)
 	if err != nil {
@@ -55,6 +56,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 }
 
 func ClientCreateServerConnection(conn *Connection, id SessionID) error {
+	conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	err := binary.Write(conn.conn, binary.LittleEndian, uint64(id))
 	if err != nil {
 		return err
@@ -93,9 +95,34 @@ func ClientReceivedSSHConnection(ssh net.Conn) SessionID {
 func (sess *Session) sendPacket(sent *Sent) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
-	ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(sess.conns))
-	fmt.Println("Selected conn index", ind, sess.conns[ind].conn.LocalAddr(), sess.conns[ind].conn.RemoteAddr())
-	connSelection := sess.conns[ind] // do this step in lock
+	available := make([]*Connection, 0)
+
+	alreadyUsedMap := make(map[*Connection]bool)
+	for i := 0; i < len(sent.sentOn); i++ {
+		alreadyUsedMap[sent.sentOn[i]] = true
+	}
+
+	for i := 0; i < len(sess.conns); i++ {
+		_, ok := alreadyUsedMap[sess.conns[i]]
+		if !ok {
+			available = append(available, sess.conns[i])
+		}
+	}
+	var connSelection *Connection
+	if len(available) == 0 {
+		if len(sess.conns) == 0 {
+			fmt.Println("OH NO UH IDK WHAT TO DO")
+			return
+		}
+		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(sess.conns))
+		fmt.Println("", ind, sess.conns[ind].conn.LocalAddr(), sess.conns[ind].conn.RemoteAddr())
+		connSelection = sess.conns[ind] // do this step in lock
+	} else {
+		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(available))
+		fmt.Println("Selected conn", available[ind].conn.LocalAddr(), available[ind].conn.RemoteAddr())
+		connSelection = available[ind] // do this step in lock
+	}
+
 	sent.sentOn = append(sent.sentOn, connSelection)
 	c := connSelection.conn
 	go c.Write(*sent.data) // haha yes
@@ -191,6 +218,7 @@ func connListen(sess *Session, conn *Connection) error {
 	fmt.Println("Beginning conn listen")
 	for {
 		//fmt.Println("Waiting for packet...")
+		conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		packet, packetErr, rawPacket := readProtoPacket(conn)
 		//fmt.Println("Got packet...")
 		if packetErr != nil {
