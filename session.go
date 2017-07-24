@@ -13,7 +13,13 @@ import (
 )
 
 type SessionID uint64
-
+type Sent struct {
+	seq     uint32
+	data    *[]byte
+	sentOn  []*Connection
+	date    int64
+	session *Session
+}
 type Session struct {
 	lock        sync.Mutex // todo rwmutex
 	sessionID   SessionID
@@ -27,7 +33,7 @@ type Session struct {
 	highestReceivedSeq uint32
 	//
 	outgoingLock sync.Mutex // this lock is ONLY for the outgoing map
-	outgoing     map[uint32]*[]byte
+	outgoing     map[uint32]*Sent
 }
 
 var sessionsLock sync.Mutex
@@ -53,7 +59,7 @@ func getSession(id SessionID) *Session {
 		sess = &Session{
 			sessionID: id,
 			inflight:  make(map[uint32]*[]byte),
-			outgoing:  make(map[uint32]*[]byte),
+			outgoing:  make(map[uint32]*Sent),
 		}
 		sessions[id] = sess
 		go sess.timer()
@@ -74,7 +80,7 @@ func newSession() *Session {
 	sess := &Session{
 		sessionID: ID,
 		inflight:  make(map[uint32]*[]byte),
-		outgoing:  make(map[uint32]*[]byte),
+		outgoing:  make(map[uint32]*Sent),
 	}
 	sessions[ID] = sess
 	go sess.timer()
@@ -184,17 +190,25 @@ func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
 }
 func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflight []uint32) {
 	fmt.Println("Received status", incomingSeq, timestamp, inflight)
+	maxReceived := uint32(0)
+	inflightMap := make(map[uint32]bool)
+	for i := 0; i < len(inflight); i++ {
+		if inflight[i] > maxReceived {
+			maxReceived = inflight[i]
+		}
+		inflightMap[inflight[i]] = true
+	}
 	sess.outgoingLock.Lock()
 	defer sess.outgoingLock.Unlock()
 	keys := make([]uint32, len(sess.outgoing)) // make a copy of the keys beacuse we're gonna modify the map
-	i := 0
+	index := 0
 	for k := range sess.outgoing {
-		keys[i] = k
-		i++
+		keys[index] = k
+		index++
 	}
 	fmt.Println("Current outgoing keys:", keys)
 	//only do a prune once we receive a status because that's the only time we get new info that lets us prune
-	for i = 0; i < len(keys); i++ {
+	for i := 0; i < len(keys); i++ {
 		if keys[i] < incomingSeq {
 			//remove everything in sess.outgoing with key less than incomingSeq
 			//because they've just told us that they've received and processed everything < incomingSeq.
@@ -210,5 +224,19 @@ func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflig
 		delete(sess.outgoing, inflight[j])
 	}
 
-	//MAYBE resend the gaps of inflight
+	for seq := incomingSeq; seq < maxReceived; seq++ {
+		_, ok := inflightMap[seq]
+		if ok {
+			continue
+		}
+		//seq is a gap in what they have received
+		//this means one connection is going faster than another
+		sent, ok := sess.outgoing[seq]
+		if !ok || sent == nil {
+			fmt.Println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n", seq, "\n\n\n\n\n\n\n\n\n\n\n\nWe already deleted from our outgoing, but now they want it again? I don't think so\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
+			break
+		}
+		diff := time.Now().UnixNano() - sent.date
+		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq,	"\n\n\n\n\n")
+	}
 }

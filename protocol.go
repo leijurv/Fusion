@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
@@ -41,7 +42,7 @@ func dedup(packet packets.Packet, rawPacket []byte) bool {
 	packetDedup[hash] = true
 	return false
 }
-func (sess *Session) wrap(data []byte) []byte {
+func (sess *Session) wrap(data []byte) *Sent {
 	seq := sess.getOutgoingSeq()
 	//fmt.Println("Wrapping packet with seq", seq)
 	packet := packets.Packet{
@@ -56,8 +57,14 @@ func (sess *Session) wrap(data []byte) []byte {
 	marshalled := marshal(&packet)
 	sess.outgoingLock.Lock()
 	defer sess.outgoingLock.Unlock()
-	sess.outgoing[seq] = &marshalled
-	return marshalled
+	sent := &Sent{
+		seq:     seq,
+		data:    &marshalled,
+		session: sess,
+		date:    time.Now().UnixNano(),
+	}
+	sess.outgoing[seq] = sent
+	return sent
 }
 func marshal(packet *packets.Packet) []byte {
 	packetData, packetErr := proto.Marshal(packet)

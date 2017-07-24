@@ -85,13 +85,15 @@ func ClientReceivedSSHConnection(ssh net.Conn) SessionID {
 	return sess.sessionID
 }
 
-func (sess *Session) sendPacket(serialized []byte) {
+func (sess *Session) sendPacket(sent *Sent) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(sess.conns))
 	fmt.Println("Selected conn index", ind, sess.conns[ind].conn.LocalAddr(), sess.conns[ind].conn.RemoteAddr())
-	connSelection := sess.conns[ind].conn // do this step in lock
-	go connSelection.Write(serialized)    // haha yes
+	connSelection := sess.conns[ind] // do this step in lock
+	sent.sentOn = append(sent.sentOn, connSelection)
+	c := connSelection.conn
+	go c.Write(*sent.data) // haha yes
 	// do actual write outside of lock
 }
 func (sess *Session) sendOnAll(serialized []byte) {
@@ -138,7 +140,7 @@ func (sess *Session) listenSSH() error {
 			partSize := len(buf) / parts
 
 			fmt.Println(len(buf), "gonna split")
-			packets := make([][]byte, parts+1)
+			packets := make([]*Sent, parts+1)
 			totalSize := 0
 			for i := 0; i < parts; i++ {
 				tmp := buf[i*partSize : (i+1)*partSize]
