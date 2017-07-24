@@ -68,7 +68,6 @@ func newSession() *Session {
 	_, ok := sessions[ID]
 	if ok {
 		//omfg collision??
-		// TODO: Check for collisions since they are much more likely given the nature of our random number generator
 		fmt.Println("Session id collision detected at id: ", ID)
 		return newSession() //recursion solves everything
 	}
