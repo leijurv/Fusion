@@ -8,6 +8,8 @@ import (
 	"sync"
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
+	"io"
+	"crypto/rand"
 )
 
 const (
@@ -15,6 +17,14 @@ const (
 )
 
 type SessionID uint64
+
+func NewSessionID() SessionID {
+	b := make([]byte, 8)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return SessionID(420) // Sensible defaults amirite?
+	}
+	return SessionID(b)
+}
 
 type Connection struct {
 	conn                       *net.Conn
@@ -48,7 +58,7 @@ func getSession(id SessionID) *Session {
 func newSession() *Session {
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
-	ID := SessionID(5021) //generate session ID
+	ID := NewSessionID() //generate session ID
 	_, ok := sessions[ID]
 	if ok {
 		//omfg collision??
@@ -180,12 +190,12 @@ func connListen(sess *Session, conn *Connection) error {
 func readProtoPacket(conn *Connection) (packets.Packet, error) {
 	var packet packets.Packet
 	packetLen := make([]byte, 2)
-	_, lenErr := (*conn.conn).Read(packetLen)
+	_, lenErr := io.ReadFull(*conn.conn, packetLen)
 	if lenErr != nil {
 		return packet, lenErr
 	}
 	packetData := make([]byte, binary.BigEndian.Uint16(packetLen))
-	_, dataErr := (*conn.conn).Read(packetData)
+	_, dataErr := io.ReadFull(conn.conn, packetData)
 	if dataErr != nil {
 		return packet, dataErr
 	}
