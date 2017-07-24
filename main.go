@@ -9,10 +9,12 @@ import (
 
 var flagListenMode bool
 var flagAddress string
+var flagIfacePoll int
 
 func init() {
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
+	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
 }
 
 func main() {
@@ -67,7 +69,6 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 			var active bool = false
 			session.lock.Lock()
 			for _, conn := range session.conns {
-				//				fmt.Println(conn.iface)
 				if iface.Name == conn.iface {
 					active = true
 					break
@@ -110,7 +111,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 				fmt.Println(ClientCreateServerConnection(connection, sessionID)) //this just makes two connections over the same interface (for testing)
 			}
 		}
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Second * time.Duration(flagIfacePoll))
 	}
 }
 
