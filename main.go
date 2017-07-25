@@ -61,6 +61,10 @@ func Client(serverAddr string) error {
 
 func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 	for {
+		if !hasSession(sessionID) {
+			fmt.Println("STOPPING SCAN")
+			return nil
+		}
 		ifaces, ifaceErr := net.Interfaces()
 		if ifaceErr != nil {
 			return ifaceErr
@@ -115,6 +119,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 				}
 				fmt.Println(ClientCreateServerConnection(connection, sessionID))
 				data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant}}})
+				getSession(sessionID).redundant = flagRedundant
 				go getSession(sessionID).sendOnAll(data)
 			}
 		}

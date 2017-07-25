@@ -54,7 +54,12 @@ func NewSessionID() SessionID {
 	}
 	return SessionID(binary.LittleEndian.Uint64(b))
 }
-
+func hasSession(id SessionID) bool {
+	sessionsLock.Lock()
+	defer sessionsLock.Unlock()
+	_, ok := sessions[id]
+	return ok
+}
 func getSession(id SessionID) *Session {
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
@@ -163,7 +168,7 @@ func (sess *Session) checkInflight() {
 	for {
 		data, ok := sess.inflight[sess.incomingSeq]
 		if !ok {
-			fmt.Println("Still waiting on", sess.incomingSeq)
+			//fmt.Println("Still waiting on", sess.incomingSeq)
 			return
 		}
 		sess.writeSSH(*data)
@@ -171,7 +176,7 @@ func (sess *Session) checkInflight() {
 		sess.incomingSeq++
 	}
 }
-func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
+func (sess *Session) onReceiveData(from *Connection, sequenceID uint32, data []byte) {
 	sess.incomingLock.Lock()
 	defer sess.incomingLock.Unlock()
 	if sequenceID > sess.highestReceivedSeq {
@@ -185,10 +190,10 @@ func (sess *Session) onReceiveData(sequenceID uint32, data []byte) {
 		return
 	}
 	if sess.incomingSeq > sequenceID {
-		fmt.Println("Dupe somehow? expecting", sess.incomingSeq, "got", sequenceID)
+		fmt.Println("Dupe somehow? expecting", sess.incomingSeq, "got", sequenceID, "from", from.conn.LocalAddr())
 		return
 	}
-	fmt.Println("Out of order, expecting", sess.incomingSeq, "got", sequenceID)
+	fmt.Println("Out of order, expecting", sess.incomingSeq, "got", sequenceID, "from", from.conn.LocalAddr())
 	sess.inflight[sequenceID] = &data
 	sess.checkInflight()
 }

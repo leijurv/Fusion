@@ -201,7 +201,7 @@ func (sess *Session) listenSSH() error {
 			}
 		}
 		if n < BUF_SIZE/5 {
-			time.Sleep(10 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
+			time.Sleep(15 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
 		}
 	}
 }
@@ -240,7 +240,7 @@ func connListen(sess *Session, conn *Connection) error {
 		}
 		switch packet.GetBody().(type) {
 		case *packets.Packet_Data:
-			go sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().GetContent())
+			go sess.onReceiveData(conn, packet.GetData().GetSequenceID(), packet.GetData().GetContent())
 		case *packets.Packet_Status:
 			go sess.onReceiveStatus(packet.GetStatus().GetIncomingSeq(), packet.GetStatus().GetTimestamp(), packet.GetStatus().GetInflight())
 		case *packets.Packet_Control:
