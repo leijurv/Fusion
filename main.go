@@ -5,16 +5,21 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/howardstark/fusion/protos"
 )
 
 var flagListenMode bool
 var flagAddress string
 var flagIfacePoll int
+var flagRedundant bool
 
 func init() {
+	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? Improves reliability.")
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
 	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
+
 }
 
 func main() {
@@ -108,7 +113,9 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 					iface: iface.Name,
 					conn:  conn,
 				}
-				fmt.Println(ClientCreateServerConnection(connection, sessionID)) //this just makes two connections over the same interface (for testing)
+				fmt.Println(ClientCreateServerConnection(connection, sessionID))
+				data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant}}})
+				go getSession(sessionID).sendOnAll(data)
 			}
 		}
 		time.Sleep(time.Second * time.Duration(flagIfacePoll))

@@ -5,6 +5,7 @@ message Packet {
   oneof body {
     Data data = 1;
     Status status = 2;
+    Control control = 3;
   }
 }
 
@@ -17,4 +18,9 @@ message Status {
 	int64 timestamp = 1;
 	uint32 incomingSeq = 2;
 	repeated uint32 inflight = 3;
+}
+
+message Control {
+	int64 timestamp = 1;
+	bool redundant = 2;
 }

@@ -24,6 +24,8 @@ func shouldDedup(packet packets.Packet) bool {
 		return false
 	case *packets.Packet_Status:
 		return true
+	case *packets.Packet_Control:
+		return true
 	}
 	panic("what is this packet")
 }

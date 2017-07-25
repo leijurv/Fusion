@@ -36,6 +36,8 @@ type Session struct {
 	//
 	outgoingLock sync.Mutex // this lock is ONLY for the outgoing map
 	outgoing     map[uint32]*Sent
+	//
+	redundant bool
 }
 
 var sessionsLock sync.Mutex
@@ -200,6 +202,9 @@ func (conn *Connection) stillActiveIn(sess *Session) bool {
 	}
 	return false
 }
+func (sess *Session) onReceiveControl(timestamp int64, redundant bool) {
+	sess.redundant = redundant
+}
 func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflight []uint32) {
 	fmt.Println("Received status", incomingSeq, timestamp, inflight)
 	maxReceived := uint32(0)
@@ -258,6 +263,7 @@ func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflig
 		//stillActive = false means it almost certainly isn't still in transit; the connection is just closed
 		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq, stillActive, "\n\n\n\n\n")
 		if !stillActive {
+			sent.date = time.Now().UnixNano() // wait a bit before doing this again
 			sess.sendPacket(sent)
 		}
 

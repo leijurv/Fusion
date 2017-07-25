@@ -93,6 +93,12 @@ func ClientReceivedSSHConnection(ssh net.Conn) SessionID {
 }
 
 func (sess *Session) sendPacket(sent *Sent) {
+	if sess.redundant {
+		fmt.Println("SENDING REDUNDANT")
+		sess.sendOnAll(*sent.data)
+		sent.date = time.Now().UnixNano()
+		return
+	}
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	available := make([]*Connection, 0)
@@ -125,6 +131,7 @@ func (sess *Session) sendPacket(sent *Sent) {
 
 	sent.sentOn = append(sent.sentOn, connSelection)
 	c := connSelection.conn
+	sent.date = time.Now().UnixNano()
 	go c.Write(*sent.data) // haha yes
 	// do actual write outside of lock
 }
@@ -236,6 +243,8 @@ func connListen(sess *Session, conn *Connection) error {
 			go sess.onReceiveData(packet.GetData().GetSequenceID(), packet.GetData().GetContent())
 		case *packets.Packet_Status:
 			go sess.onReceiveStatus(packet.GetStatus().GetIncomingSeq(), packet.GetStatus().GetTimestamp(), packet.GetStatus().GetInflight())
+		case *packets.Packet_Control:
+			go sess.onReceiveControl(packet.GetControl().GetTimestamp(), packet.GetControl().GetRedundant())
 		}
 	}
 	panic("conn listen exited loop without returning err")
