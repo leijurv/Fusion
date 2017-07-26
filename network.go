@@ -16,12 +16,6 @@ const (
 	RAND_REORDER = false
 )
 
-type Connection struct {
-	iface                      string
-	conn                       net.Conn
-	lastSuccessfulDataTransfer uint64 //idk more fields here
-}
-
 func ServerReceivedClientConnection(conn net.Conn) error {
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var id uint64
@@ -48,21 +42,19 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 		go sess.listenSSH()
 	}
 	fmt.Println("Adding")
-	go func() {
-		fmt.Println("AAAAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHh")
-		sess.addConnAndListen(&Connection{conn: conn})
-	}()
+	sess.addConnAndListen(&TcpConnection{conn: conn})
 	return nil
 }
 
-func ClientCreateServerConnection(conn *Connection, id SessionID) error {
-	conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	err := binary.Write(conn.conn, binary.LittleEndian, uint64(id))
+func ClientCreateServerConnection(conn Connection, id SessionID) error {
+	conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	err := binary.Write(conn.(*TcpConnection).conn, binary.LittleEndian, uint64(id)) //TODO
 	if err != nil {
 		return err
 	}
 	var verify uint64
-	err = binary.Read(conn.conn, binary.BigEndian, &verify) // verifies that proper 2-way communication is happening before adding to list of conns
+	//TODO
+	err = binary.Read(conn.(*TcpConnection).conn, binary.BigEndian, &verify) // verifies that proper 2-way communication is happening before adding to list of conns
 	if err != nil {
 		return err
 	}
@@ -79,7 +71,7 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 		fmt.Println(err)
 		return err
 	}
-	fmt.Println("Client creating new server conn for session id", id, "and", conn.conn)
+	fmt.Println("Client creating new server conn for session id", id, "and", conn.(*TcpConnection).conn)
 	sess.addConnAndListen(conn)
 	return nil
 }
@@ -100,10 +92,9 @@ func (sess *Session) sendPacket(sent *Sent) {
 		return
 	}
 	sess.lock.Lock()
-	defer sess.lock.Unlock()
-	available := make([]*Connection, 0)
+	available := make([]Connection, 0)
 
-	alreadyUsedMap := make(map[*Connection]bool)
+	alreadyUsedMap := make(map[Connection]bool)
 	for i := 0; i < len(sent.sentOn); i++ {
 		alreadyUsedMap[sent.sentOn[i]] = true
 	}
@@ -114,25 +105,26 @@ func (sess *Session) sendPacket(sent *Sent) {
 			available = append(available, sess.conns[i])
 		}
 	}
-	var connSelection *Connection
+	var connSelection Connection
 	if len(available) == 0 {
 		if len(sess.conns) == 0 {
 			fmt.Println("OH NO UH IDK WHAT TO DO")
 			return
 		}
 		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(sess.conns))
-		fmt.Println("", ind, sess.conns[ind].conn.LocalAddr(), sess.conns[ind].conn.RemoteAddr())
+		fmt.Println("", ind, sess.conns[ind].(*TcpConnection).conn.LocalAddr(), sess.conns[ind].(*TcpConnection).conn.RemoteAddr())
 		connSelection = sess.conns[ind] // do this step in lock
 	} else {
 		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(available))
-		fmt.Println("Selected conn", available[ind].conn.LocalAddr(), available[ind].conn.RemoteAddr())
+		fmt.Println("Selected conn", available[ind].(*TcpConnection).conn.LocalAddr(), available[ind].(*TcpConnection).conn.RemoteAddr())
 		connSelection = available[ind] // do this step in lock
 	}
 
 	sent.sentOn = append(sent.sentOn, connSelection)
-	c := connSelection.conn
 	sent.date = time.Now().UnixNano()
-	go c.Write(*sent.data) // haha yes
+	sess.lock.Unlock()
+
+	connSelection.Write(*sent.data) // haha yes
 	// do actual write outside of lock
 }
 func (sess *Session) sendOnAll(serialized []byte) {
@@ -141,7 +133,7 @@ func (sess *Session) sendOnAll(serialized []byte) {
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {
 		//fmt.Println("Writing")
-		go sess.conns[i].conn.Write(serialized) // goroutine is fine because order doesn't matter
+		go sess.conns[i].Write(serialized) // goroutine is fine because order doesn't matter
 	}
 }
 
@@ -206,7 +198,7 @@ func (sess *Session) listenSSH() error {
 	}
 }
 
-func (sess *Session) addConnAndListen(conn *Connection) {
+func (sess *Session) addConnAndListen(conn Connection) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	sess.conns = append(sess.conns, conn)
@@ -224,11 +216,11 @@ func (sess *Session) writeSSH(data []byte) {
 	(*sess.sshConn).Write(data)
 }
 
-func connListen(sess *Session, conn *Connection) error {
+func connListen(sess *Session, conn Connection) error {
 	fmt.Println("Beginning conn listen")
 	for {
 		//fmt.Println("Waiting for packet...")
-		conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		packet, packetErr, rawPacket := readProtoPacket(conn)
 		//fmt.Println("Got packet...")
 		if packetErr != nil {

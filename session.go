@@ -17,7 +17,7 @@ type SessionID uint64
 type Sent struct {
 	seq     uint32
 	data    *[]byte
-	sentOn  []*Connection
+	sentOn  []Connection
 	date    int64
 	session *Session
 }
@@ -26,7 +26,7 @@ type Session struct {
 	lock        sync.Mutex // todo rwmutex
 	sessionID   SessionID
 	sshConn     *net.Conn
-	conns       []*Connection
+	conns       []Connection
 	outgoingSeq uint32
 	//
 	incomingLock       sync.Mutex // this lock is for inflight, incomingSeq, and highestReceivedSeq
@@ -109,7 +109,7 @@ func (sess *Session) kill() {
 		(*sess.sshConn).Close()
 	}
 	for i := 0; i < len(sess.conns); i++ {
-		sess.conns[i].conn.Close()
+		sess.conns[i].Close()
 	}
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
@@ -151,7 +151,7 @@ func (sess *Session) tick() {
 	data := marshal(&packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}})
 	go sess.sendOnAll(data)
 }
-func (sess *Session) removeConn(conn *Connection) {
+func (sess *Session) removeConn(conn Connection) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {
@@ -176,7 +176,7 @@ func (sess *Session) checkInflight() {
 		sess.incomingSeq++
 	}
 }
-func (sess *Session) onReceiveData(from *Connection, sequenceID uint32, data []byte) {
+func (sess *Session) onReceiveData(from Connection, sequenceID uint32, data []byte) {
 	sess.incomingLock.Lock()
 	defer sess.incomingLock.Unlock()
 	if sequenceID > sess.highestReceivedSeq {
@@ -190,14 +190,14 @@ func (sess *Session) onReceiveData(from *Connection, sequenceID uint32, data []b
 		return
 	}
 	if sess.incomingSeq > sequenceID {
-		fmt.Println("Dupe somehow? expecting", sess.incomingSeq, "got", sequenceID, "from", from.conn.LocalAddr())
+		fmt.Println("Dupe somehow? expecting", sess.incomingSeq, "got", sequenceID, "from", from.(*TcpConnection).conn.LocalAddr())
 		return
 	}
-	fmt.Println("Out of order, expecting", sess.incomingSeq, "got", sequenceID, "from", from.conn.LocalAddr())
+	fmt.Println("Out of order, expecting", sess.incomingSeq, "got", sequenceID, "from", from.(*TcpConnection).conn.LocalAddr())
 	sess.inflight[sequenceID] = &data
 	sess.checkInflight()
 }
-func (conn *Connection) stillActiveIn(sess *Session) bool {
+func stillActiveIn(conn Connection, sess *Session) bool {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {
@@ -261,7 +261,7 @@ func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflig
 		diff := time.Now().UnixNano() - sent.date
 		stillActive := false
 		for _, conn := range sent.sentOn {
-			if conn.stillActiveIn(sess) {
+			if stillActiveIn(conn, sess) {
 				stillActive = true
 			}
 		}

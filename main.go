@@ -78,7 +78,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 			var active bool = false
 			session.lock.Lock()
 			for _, conn := range session.conns {
-				if iface.Name == conn.iface {
+				if iface.Name == conn.(*TcpConnection).iface {
 					active = true
 					break
 				}
@@ -113,7 +113,7 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 					fmt.Println(err)
 					continue
 				}
-				connection := &Connection{
+				connection := &TcpConnection{
 					iface: iface.Name,
 					conn:  conn,
 				}

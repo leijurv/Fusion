@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -83,17 +82,17 @@ func marshal(packet *packets.Packet) []byte {
 	packetData = append(packetLen, packetData...)
 	return packetData
 }
-func readProtoPacket(conn *Connection) (packets.Packet, error, []byte) {
+func readProtoPacket(conn Connection) (packets.Packet, error, []byte) {
 	var packet packets.Packet
 	packetLen := make([]byte, 4)
-	_, lenErr := io.ReadFull(conn.conn, packetLen)
+	lenErr := conn.ReadFull(packetLen)
 	if lenErr != nil {
 		return packet, lenErr, nil
 	}
 	l := binary.LittleEndian.Uint32(packetLen)
 	fmt.Println("Reading packet of length", l)
 	packetData := make([]byte, l)
-	_, dataErr := io.ReadFull(conn.conn, packetData)
+	dataErr := conn.ReadFull(packetData)
 	if dataErr != nil {
 		return packet, dataErr, packetData
 	}
