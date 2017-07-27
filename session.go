@@ -49,8 +49,7 @@ var (
 func NewSessionID() SessionID {
 	b := make([]byte, 8)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		fmt.Println("Defaulting nonrandom session id 1", err)
-		return SessionID(420) // Sensible defaults amirite?
+		panic("unable to generate random session id")
 	}
 	return SessionID(binary.BigEndian.Uint64(b))
 }
