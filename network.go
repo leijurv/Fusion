@@ -128,7 +128,7 @@ func (sess *Session) addConnAndListen(conn Connection) {
 func (sess *Session) writeSSH(data []byte) {
 	fmt.Println("Sending", len(data), "bytes to ssh")
 	n, err := (*sess.sshConn).Write(data)
-	if n != len(data) {
+	if n != len(data) && err == nil {
 		panic("whatt")
 	}
 	if err != nil {
