@@ -44,7 +44,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 		go sess.listenSSH()
 	}
 	fmt.Println("Adding")
-	sess.addConnAndListen(tcp)
+	go sess.addConnAndListen(tcp)
 	return nil
 }
 
