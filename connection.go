@@ -33,7 +33,13 @@ func (conn *TcpConnection) Write(data []byte) error {
 	if !conn.running { // conn.closed == nil && !conn.running means it hasn't started yet
 		conn.start()
 	}
-	conn.outChan <- data
+	select {
+	case conn.outChan <- data:
+		//fmt.Println("Wrote without blocking yay")
+	default:
+		conn.outChan <- data
+		fmt.Println("Wrote with blocking =(")
+	}
 	return nil
 }
 func (conn *TcpConnection) start() {
@@ -63,11 +69,11 @@ func (conn *TcpConnection) writeloop() {
 func (conn *TcpConnection) Close() {
 	conn.conn.Close()
 	conn.lock.Lock()
+	defer conn.lock.Unlock()
 	if conn.running {
 		close(conn.outChan)
 	}
 	conn.running = false
-	conn.lock.Unlock()
 	select {
 	case conn.outChan <- []byte("goodbye"):
 	default:
