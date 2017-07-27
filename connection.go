@@ -70,13 +70,14 @@ func (conn *TcpConnection) Close() {
 	conn.conn.Close()
 	conn.lock.Lock()
 	defer conn.lock.Unlock()
-	if conn.running {
-		close(conn.outChan)
-	}
+	run := conn.running
 	conn.running = false
 	select {
 	case conn.outChan <- []byte("goodbye"):
 	default:
+	}
+	if run {
+		close(conn.outChan)
 	}
 }
 func (conn *TcpConnection) LocalAddr() net.Addr {
