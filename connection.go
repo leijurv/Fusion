@@ -100,13 +100,12 @@ func (conn *TcpConnection) Close() {
 	if conn.closed == nil {
 		conn.closed = errors.New("close requested")
 	}
-	run := conn.running
-	conn.running = false
-	select {
-	case conn.outChan <- []byte("goodbye"):
-	default:
-	}
-	if run {
+	if conn.running {
+		conn.running = false
+		select {
+		case conn.outChan <- []byte("goodbye"):
+		default:
+		}
 		close(conn.outChan)
 	}
 }
