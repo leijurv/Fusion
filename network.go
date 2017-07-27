@@ -115,7 +115,7 @@ func (sess *Session) listenSSH() error {
 		} else {
 			sess.sendPacket(sess.wrap(buf))
 		}
-		if n < BUF_SIZE/5 {
+		if n < BUF_SIZE/5 { //TODO /5 and 15* should be consts
 			time.Sleep(15 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
 		}
 	}
