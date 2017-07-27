@@ -141,7 +141,14 @@ func connListen(sess *Session, conn Connection) error {
 	fmt.Println("Beginning conn listen")
 	for {
 		//fmt.Println("Waiting for packet...")
-		conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_, ok := conn.(*TcpConnection)
+		if ok {
+			conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		} else {
+			for i := 0; i < 10; i++ {
+				fmt.Println("\n\nTHIS ISNT A TCP CONNECTION PLEASE IMPLEMENT READ DEADLINES ITS net.Conn.SetReadDeadline PLSTHX\n\n")
+			}
+		}
 		packet, packetErr, rawPacket := readProtoPacket(conn)
 		//fmt.Println("Got packet...")
 		if packetErr != nil {
