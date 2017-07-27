@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -24,11 +23,21 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 		return errors.New("naughty")
 	}
 	id := SessionID(packet.GetInit().GetSession())
+	inter := packet.GetInit().GetInterface()
 	fmt.Println("Server received connection", conn, " for session id", id, "from remote", conn.RemoteAddr(), "and local", conn.LocalAddr(), "and interface", packet.GetInit().GetInterface())
-	err := binary.Write(conn, binary.LittleEndian, uint64(id))
+
+	err := tcp.Write(marshal(&packets.Packet{
+		Body: &packets.Packet_Confirm{
+			Confirm: &packets.Confirm{
+				Session:   uint64(id),
+				Interface: inter,
+			},
+		},
+	}))
 	if err != nil {
 		return err
 	}
+
 	sess := getSession(SessionID(id))
 	sess.redundant = packet.GetInit().GetControl().GetRedundant()
 	sess.lock.Lock()
@@ -50,11 +59,12 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 
 func ClientCreateServerConnection(conn Connection, id SessionID) error {
 	conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	inter := uint64(5021)
 	err := conn.Write(marshal(&packets.Packet{
 		Body: &packets.Packet_Init{
 			Init: &packets.Init{
 				Session:   uint64(id),
-				Interface: 5021,
+				Interface: inter,
 				Control: &packets.Control{
 					Timestamp: time.Now().UnixNano(),
 					Redundant: flagRedundant,
@@ -65,13 +75,18 @@ func ClientCreateServerConnection(conn Connection, id SessionID) error {
 	if err != nil {
 		return err
 	}
-	var verify uint64
-	err = binary.Read(conn.(*TcpConnection).conn, binary.LittleEndian, &verify) // verifies that proper 2-way communication is happening before adding to list of conns
-	if err != nil {
-		return err
+	packet, packetErr, _ := readProtoPacket(conn)
+	if packetErr != nil {
+		fmt.Println("Read err", packetErr)
+		return packetErr
 	}
-	if verify != uint64(id) {
-		err = errors.New("ID response mismatch " + string(verify) + "  " + string(id))
+	_, ok := packet.GetBody().(*packets.Packet_Confirm)
+	if !ok {
+		fmt.Println("thats NOT a confirm packet")
+		return errors.New("naughty")
+	}
+	if packet.GetConfirm().GetSession() != uint64(id) || packet.GetConfirm().GetInterface() != inter {
+		err = errors.New("ID response mismatch " + string(packet.GetConfirm().GetSession()) + "  " + string(id) + " " + string(packet.GetConfirm().GetInterface()) + "  " + string(inter))
 		fmt.Println(err)
 		return err
 	}

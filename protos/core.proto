@@ -7,6 +7,7 @@ message Packet {
     Data data = 2;
     Status status = 3;
     Control control = 4;
+    Confirm confirm = 5;
   }
 }
 
@@ -30,4 +31,9 @@ message Init{
 	Control control = 1;
 	uint64 interface = 2;
     uint64 session = 3;
+}
+
+message Confirm{
+	uint64 session = 1;
+	uint64 interface = 2;
 }
