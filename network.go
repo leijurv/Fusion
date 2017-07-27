@@ -130,14 +130,15 @@ func (sess *Session) writeSSH(data []byte) {
 func connListen(sess *Session, conn Connection) error {
 	fmt.Println("Beginning conn listen")
 	for {
-		//fmt.Println("Waiting for packet...")
+		fmt.Println("Waiting for packet...")
 		conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		packet, packetErr, rawPacket := readProtoPacket(conn)
-		//fmt.Println("Got packet...")
+		fmt.Println("Got packet...")
 		if packetErr != nil {
 			fmt.Println("Read err", packetErr)
 			return packetErr
 		}
+
 		if dedup(packet, rawPacket) {
 			continue
 		}
