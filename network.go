@@ -78,6 +78,10 @@ func (sess *Session) sendOnAll(serialized []byte) {
 	fmt.Println("Sending out packet to", len(sess.conns), "destinations")
 	sess.lock.Lock() // lock is ok because we are starting goroutines to do the blocking io
 	defer sess.lock.Unlock()
+	if len(sess.conns) == 1 {
+		sess.conns[0].Write(serialized)
+		return
+	}
 	for i := 0; i < len(sess.conns); i++ {
 		//fmt.Println("Writing")
 		go sess.conns[i].Write(serialized) // goroutine is fine because order doesn't matter
