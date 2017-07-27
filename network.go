@@ -41,6 +41,10 @@ func (sess *Session) sendPacket(sent *Sent) {
 	var connSelection Connection
 	if len(available) == 0 {
 		if len(sess.conns) == 0 {
+			//this doesn't need to return an error
+			//if there are no connections, it can just not send
+			//it's still in outgoing
+			//so when a conn is reestablished it'll be sent
 			fmt.Println("OH NO UH IDK WHAT TO DO")
 			return
 		}
