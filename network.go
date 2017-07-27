@@ -42,11 +42,21 @@ func (sess *Session) sendPacket(sent *Sent) {
 			return
 		}
 		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(sess.conns))
-		fmt.Println("", ind, sess.conns[ind].(*TcpConnection).conn.LocalAddr(), sess.conns[ind].(*TcpConnection).conn.RemoteAddr())
+		_, ok := sess.conns[ind].(*TcpConnection)
+		if ok {
+			fmt.Println("", ind, sess.conns[ind].(*TcpConnection).conn.LocalAddr(), sess.conns[ind].(*TcpConnection).conn.RemoteAddr())
+		} else {
+			fmt.Println("sel not tcp")
+		}
 		connSelection = sess.conns[ind] // do this step in lock
 	} else {
 		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(available))
-		fmt.Println("Selected conn", available[ind].(*TcpConnection).conn.LocalAddr(), available[ind].(*TcpConnection).conn.RemoteAddr())
+		_, ok := sess.conns[ind].(*TcpConnection)
+		if ok {
+			fmt.Println("Selected conn", available[ind].(*TcpConnection).conn.LocalAddr(), available[ind].(*TcpConnection).conn.RemoteAddr())
+		} else {
+			fmt.Println("selected not tcp")
+		}
 		connSelection = available[ind] // do this step in lock
 	}
 
