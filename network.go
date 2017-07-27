@@ -22,6 +22,14 @@ func (sess *Session) sendPacket(sent *Sent) {
 		return
 	}
 	sess.lock.Lock()
+	if len(sess.conns) == 1 {
+		c := sess.conns[0]
+		sent.sentOn = append(sent.sentOn, c) // TODO lock
+		sent.date = time.Now().UnixNano()
+		sess.lock.Unlock() // no blocking io in lock
+		c.Write(*sent.data)
+		return
+	}
 	//TODO add optimizations like:
 	//if sentOn is empty, just pick a connection at random
 	//if there is 1 connection, don't use the random number generator, just go ahead and send it
@@ -69,7 +77,7 @@ func (sess *Session) sendPacket(sent *Sent) {
 
 	sent.sentOn = append(sent.sentOn, connSelection) // TODO lock
 	sent.date = time.Now().UnixNano()
-	sess.lock.Unlock()
+	sess.lock.Unlock() // no blocking io in lock
 
 	connSelection.Write(*sent.data) // haha yes
 	// do actual write outside of lock
@@ -79,8 +87,9 @@ func (sess *Session) sendOnAll(serialized []byte) {
 	sess.lock.Lock() // lock is ok because we are starting goroutines to do the blocking io
 	count := len(sess.conns)
 	if count == 1 {
-		sess.conns[0].Write(serialized)
-		sess.lock.Unlock()
+		c := sess.conns[0]
+		sess.lock.Unlock() // no blocking io in lock
+		c.Write(serialized)
 		return
 	}
 	done := make(chan error)
@@ -91,7 +100,7 @@ func (sess *Session) sendOnAll(serialized []byte) {
 			done <- conn.Write(serialized) // goroutine is fine because order doesn't matter
 		}(c, serialized)
 	}
-	sess.lock.Unlock()
+	sess.lock.Unlock() // no blocking io in lock
 	ind := 0
 	for {
 		a := <-done

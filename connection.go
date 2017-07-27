@@ -48,23 +48,30 @@ func (conn *TcpConnection) writeloop() {
 		if err == nil && a != len(data) {
 			panic("what the christ " + string(a) + " " + string(len(data)))
 		}
-		if err != nil {
+		if err != nil || !conn.running {
 			conn.lock.Lock()
 			defer conn.lock.Unlock()
 			conn.closed = err
+			close(conn.outChan)
 			conn.running = false
 			fmt.Println("closing", conn.conn, "because", err)
-			conn.Close()
+			go conn.Close()
 			return
 		}
 	}
 }
 func (conn *TcpConnection) Close() {
+	conn.conn.Close()
 	conn.lock.Lock()
-	close(conn.outChan)
+	if conn.running {
+		close(conn.outChan)
+	}
 	conn.running = false
 	conn.lock.Unlock()
-	conn.conn.Close()
+	select {
+	case conn.outChan <- []byte("goodbye"):
+	default:
+	}
 }
 func (conn *TcpConnection) LocalAddr() net.Addr {
 	return conn.conn.LocalAddr()
