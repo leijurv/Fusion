@@ -22,6 +22,7 @@ message Status {
 
 message Control {
 	int64 timestamp = 1;
-	bool redundant = 2;
-    uint64 interface = 3;
+    uint64 session = 2;
+	bool redundant = 3;
+    uint64 interface = 4;
 }
