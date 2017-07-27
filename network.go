@@ -60,17 +60,18 @@ func (sess *Session) sendPacket(sent *Sent) {
 	rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 	perm := rSrc.Perm(len(avail))
 	wrote := false
-	var connSelection Connection
+	connSelection := avail[rSrc.Intn(len(avail))]
 	for i := 0; i < len(avail); i++ {
-		connSelection = avail[perm[i]]
-		ok, _ := connSelection.WriteNonBlocking(*sent.data)
+		c := avail[perm[i]]
+		ok, _ := c.WriteNonBlocking(*sent.data)
 		if ok {
 			wrote = true
+			connSelection = c
+			break
 		}
 	}
 	if !wrote {
 		fmt.Println("Failed, picking at random")
-		connSelection = avail[rSrc.Intn(len(avail))]
 	}
 	_, ok := connSelection.(*TcpConnection)
 	if ok {
