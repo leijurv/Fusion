@@ -10,9 +10,13 @@ var flagListenMode bool
 var flagAddress string
 var flagIfacePoll int
 var flagRedundant bool
+var flagRedundantDownload bool
+var flagRedundantUpload bool
 
 func init() {
 	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? Improves reliability.")
+	flag.BoolVar(&flagRedundantDownload, "rd", false, "Redundant mode only for downloads")
+	flag.BoolVar(&flagRedundantUpload, "ru", false, "Redundant mode only for uploads")
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
 	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
@@ -21,7 +25,12 @@ func init() {
 
 func main() {
 	flag.Parse()
-
+	if flagListenMode {
+		if flagRedundant || flagRedundantUpload || flagRedundantDownload {
+			fmt.Println("In listen mode, the redundant flags have no effect. The client that makes the connection decides it.")
+			return
+		}
+	}
 	if flagListenMode {
 		err := Server()
 		if err != nil {

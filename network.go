@@ -10,7 +10,12 @@ import (
 )
 
 const (
-	BUF_SIZE     = 65536 // TODO figure out what the optimal would be
+	//BUF_SIZE is not determined by how fast or how often SSH sends out data, or how big. The connection to ssh is a localhost socket, which is fast as can be, and is not an issue.
+	//It also is not determined by TCP packet size. TCP packet max size is anywhere from 800 to 1400 to 1500 to 9000 to 65535. The OS is very very good and fast at splitting up writes into all the requisite TCP packets
+	//the real slow part is incoming and outgoing, and keeping track of all this data, all the goroutines and outgoing channels, etc. We want to have big chunks. At 10mbit, 64kb chunks result in ~20 per second. That's completely doable. Smaller chunks like the TCP max size on different networks would be really pushing it
+	BUF_SIZE = 65535 - 11 - 1 // encoding with protobuf into the Packet_Data results in 11 bytes added. when BUF_SIZE is 65536, we get packets up to 65547 in length.
+	//by limiting the post-wrapping length to less than 65535, we can encode the protobuf packet length into 2 bytes instead of 4.
+
 	RAND_REORDER = false // TODO cli option
 )
 

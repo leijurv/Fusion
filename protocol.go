@@ -73,23 +73,23 @@ func marshal(packet *packets.Packet) []byte {
 		fmt.Println("Marshal error", packetErr)
 		return nil
 	}
-	if len(packetData) >= 4294967296 {
+	if len(packetData) >= 65535 {
 		fmt.Println(errors.New("Packet was too big"))
 		return nil
 	}
-	packetLen := make([]byte, 4)
-	binary.BigEndian.PutUint32(packetLen, uint32(len(packetData)))
+	packetLen := make([]byte, 2)
+	binary.BigEndian.PutUint16(packetLen, uint16(len(packetData)))
 	packetData = append(packetLen, packetData...)
 	return packetData
 }
 func readProtoPacket(conn Connection) (packets.Packet, error, []byte) {
 	var packet packets.Packet
-	packetLen := make([]byte, 4)
+	packetLen := make([]byte, 2)
 	lenErr := conn.ReadFull(packetLen)
 	if lenErr != nil {
 		return packet, lenErr, nil
 	}
-	l := binary.BigEndian.Uint32(packetLen)
+	l := binary.BigEndian.Uint16(packetLen)
 	fmt.Println("Reading packet of length", l)
 	packetData := make([]byte, l)
 	dataErr := conn.ReadFull(packetData)

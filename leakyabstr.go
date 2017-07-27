@@ -67,7 +67,7 @@ func ClientCreateServerConnection(conn Connection, id SessionID) error {
 				Interface: inter,
 				Control: &packets.Control{
 					Timestamp: time.Now().UnixNano(),
-					Redundant: flagRedundant,
+					Redundant: flagRedundant || flagRedundantDownload,
 				},
 			},
 		},

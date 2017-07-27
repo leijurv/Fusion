@@ -74,8 +74,8 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 					conn:  conn,
 				}
 				fmt.Println(ClientCreateServerConnection(connection, sessionID))
-				data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant}}})
-				getSession(sessionID).redundant = flagRedundant
+				data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant || flagRedundantDownload}}})
+				getSession(sessionID).redundant = flagRedundant || flagRedundantUpload
 				go getSession(sessionID).sendOnAll(data)
 			}
 		}
