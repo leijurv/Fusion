@@ -75,7 +75,7 @@ func ClientCreateServerConnection(conn Connection, id SessionID) error {
 		fmt.Println(err)
 		return err
 	}
-	fmt.Println("ITS WORKING OKAY??")
+	//fmt.Println("ITS WORKING OKAY??")
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
 	sess, ok := sessions[id]
