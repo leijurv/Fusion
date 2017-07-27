@@ -50,21 +50,12 @@ func (conn *TcpConnection) WriteNonBlocking(data []byte) (bool, error) {
 	}
 }
 func (conn *TcpConnection) Write(data []byte) error {
-	conn.lock.Lock()
-	if conn.closed != nil {
-		conn.lock.Unlock()
-		return conn.closed // if the writeloop has encountered an error, return it here
+	ok, err := conn.WriteNonBlocking(data)
+	if err != nil {
+		return err
 	}
-	if !conn.running { // conn.closed == nil && !conn.running means it hasn't started yet
-		conn.start()
-	}
-	select {
-	case conn.outChan <- data: // this does not block
-		conn.lock.Unlock()
-		//fmt.Println("Wrote without blocking yay")
-	default:
-		conn.lock.Unlock()
-		conn.outChan <- data // this is blocking io so unlock beforehand
+	if !ok {
+		conn.outChan <- data // blocking write
 		fmt.Println("Wrote with blocking =(")
 	}
 	return nil
