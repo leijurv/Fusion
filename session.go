@@ -269,7 +269,7 @@ func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflig
 		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq, stillActive, "\n\n\n\n\n")
 		if !stillActive {
 			sent.date = time.Now().UnixNano() // wait a bit before doing this again
-			sess.sendPacket(sent)
+			sess.sendOnAll(*sent.data)
 		}
 
 	}
