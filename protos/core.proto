@@ -3,9 +3,10 @@ package packets;
 
 message Packet {
   oneof body {
-    Data data = 1;
-    Status status = 2;
-    Control control = 3;
+  	Init init = 1;
+    Data data = 2;
+    Status status = 3;
+    Control control = 4;
   }
 }
 
@@ -22,7 +23,11 @@ message Status {
 
 message Control {
 	int64 timestamp = 1;
-    uint64 session = 2;
 	bool redundant = 3;
-    uint64 interface = 4;
+}
+
+message Init{
+	Control control = 1;
+	uint64 interface = 2;
+    uint64 session = 3;
 }

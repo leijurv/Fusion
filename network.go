@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	mrand "math/rand"
 	"time"
@@ -140,13 +141,21 @@ func connListen(sess *Session, conn Connection) error {
 		if dedup(packet, rawPacket) {
 			continue
 		}
-		switch packet.GetBody().(type) {
+		switch packet.GetBody().(type) { //TODO why on earth are these all go
 		case *packets.Packet_Data:
 			go sess.onReceiveData(conn, packet.GetData().GetSequenceID(), packet.GetData().GetContent())
 		case *packets.Packet_Status:
 			go sess.onReceiveStatus(packet.GetStatus().GetIncomingSeq(), packet.GetStatus().GetTimestamp(), packet.GetStatus().GetInflight())
 		case *packets.Packet_Control:
 			go sess.onReceiveControl(packet.GetControl().GetTimestamp(), packet.GetControl().GetRedundant())
+		case *packets.Packet_Init:
+			err := errors.New("Init packet after init")
+			fmt.Println(err, packet, packet.GetBody())
+			return err
+		default:
+			err := errors.New("Unknown packet type?")
+			fmt.Println(err, packet, packet.GetBody())
+			return err
 		}
 	}
 	panic("conn listen exited loop without returning err")
