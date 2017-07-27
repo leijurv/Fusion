@@ -16,7 +16,7 @@ func init() {
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
 	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
-
+	//flag.Memes
 }
 
 func main() {

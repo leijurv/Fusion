@@ -78,7 +78,7 @@ func marshal(packet *packets.Packet) []byte {
 		return nil
 	}
 	packetLen := make([]byte, 4)
-	binary.LittleEndian.PutUint32(packetLen, uint32(len(packetData)))
+	binary.BigEndian.PutUint32(packetLen, uint32(len(packetData)))
 	packetData = append(packetLen, packetData...)
 	return packetData
 }
@@ -89,7 +89,7 @@ func readProtoPacket(conn Connection) (packets.Packet, error, []byte) {
 	if lenErr != nil {
 		return packet, lenErr, nil
 	}
-	l := binary.LittleEndian.Uint32(packetLen)
+	l := binary.BigEndian.Uint32(packetLen)
 	fmt.Println("Reading packet of length", l)
 	packetData := make([]byte, l)
 	dataErr := conn.ReadFull(packetData)

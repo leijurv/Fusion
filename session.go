@@ -52,7 +52,7 @@ func NewSessionID() SessionID {
 		fmt.Println("Defaulting nonrandom session id 1", err)
 		return SessionID(420) // Sensible defaults amirite?
 	}
-	return SessionID(binary.LittleEndian.Uint64(b))
+	return SessionID(binary.BigEndian.Uint64(b))
 }
 func hasSession(id SessionID) bool {
 	sessionsLock.Lock()
