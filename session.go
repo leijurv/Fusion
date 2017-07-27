@@ -176,7 +176,9 @@ func (sess *Session) checkInflight() { // *sheds tear* it's... beautiful
 		sess.incomingSeq++
 	}
 }
-func (sess *Session) onReceiveData(from Connection, sequenceID uint32, data []byte) {
+func (sess *Session) onReceiveData(from Connection, packet *packets.Data) {
+	sequenceID := packet.GetSequenceID()
+	data := packet.GetContent()
 	sess.incomingLock.Lock()
 	defer sess.incomingLock.Unlock()
 	if sequenceID > sess.highestReceivedSeq {
@@ -207,10 +209,13 @@ func active(conn Connection, sess *Session) bool {
 	}
 	return false
 }
-func (sess *Session) onReceiveControl(timestamp int64, redundant bool) {
-	sess.redundant = redundant
+func (sess *Session) onReceiveControl(packet *packets.Control) {
+	sess.redundant = packet.GetRedundant()
 }
-func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflight []uint32) {
+func (sess *Session) onReceiveStatus(packet *packets.Status) {
+	incomingSeq := packet.GetIncomingSeq()
+	timestamp := packet.GetTimestamp()
+	inflight := packet.GetInflight()
 	fmt.Println("Received status", incomingSeq, timestamp, inflight)
 	maxReceived := uint32(0)
 	inflightMap := make(map[uint32]bool)

@@ -196,11 +196,11 @@ func connListen(sess *Session, conn Connection) error {
 		}
 		switch packet.GetBody().(type) { //TODO why on earth are these all go
 		case *packets.Packet_Data:
-			go sess.onReceiveData(conn, packet.GetData().GetSequenceID(), packet.GetData().GetContent())
+			go sess.onReceiveData(conn, packet.GetData())
 		case *packets.Packet_Status:
-			go sess.onReceiveStatus(packet.GetStatus().GetIncomingSeq(), packet.GetStatus().GetTimestamp(), packet.GetStatus().GetInflight())
+			go sess.onReceiveStatus(packet.GetStatus())
 		case *packets.Packet_Control:
-			go sess.onReceiveControl(packet.GetControl().GetTimestamp(), packet.GetControl().GetRedundant())
+			go sess.onReceiveControl(packet.GetControl())
 		case *packets.Packet_Init:
 			err := errors.New("Init packet after init")
 			fmt.Println(err, packet, packet.GetBody())
