@@ -77,15 +77,39 @@ func (sess *Session) sendPacket(sent *Sent) {
 func (sess *Session) sendOnAll(serialized []byte) {
 	fmt.Println("Sending out packet to", len(sess.conns), "destinations")
 	sess.lock.Lock() // lock is ok because we are starting goroutines to do the blocking io
-	defer sess.lock.Unlock()
-	if len(sess.conns) == 1 {
+	count := len(sess.conns)
+	if count == 1 {
 		sess.conns[0].Write(serialized)
+		sess.lock.Unlock()
 		return
 	}
-	for i := 0; i < len(sess.conns); i++ {
+	done := make(chan error)
+	for i := 0; i < count; i++ {
 		//fmt.Println("Writing")
-		go sess.conns[i].Write(serialized) // goroutine is fine because order doesn't matter
+		c := sess.conns[i]
+		go func(conn Connection, serialized []byte) {
+			done <- conn.Write(serialized) // goroutine is fine because order doesn't matter
+		}(c, serialized)
 	}
+	sess.lock.Unlock()
+	ind := 0
+	for {
+		a := <-done
+		ind++
+		if a == nil { // one of them succeeded yay
+			break
+		}
+		if ind == count {
+			fmt.Println("OH NO THEY ALL FAILED")
+			break
+		}
+	}
+	go func() { // clean up after ourselves
+		for i := ind; i < count; i++ {
+			<-done
+		}
+		close(done)
+	}()
 }
 
 func (sess *Session) listenSSH() error {
