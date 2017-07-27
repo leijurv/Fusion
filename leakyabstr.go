@@ -64,7 +64,7 @@ func ClientCreateServerConnection(conn Connection, id SessionID) error {
 		return err
 	}
 	fmt.Println("Client creating new server conn for session id", id, "and", conn.(*TcpConnection).conn)
-	sess.addConnAndListen(conn)
+	go sess.addConnAndListen(conn) // new goroutine because sessionslock
 	return nil
 }
 

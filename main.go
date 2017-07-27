@@ -4,9 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"time"
-
-	"github.com/howardstark/fusion/protos"
 )
 
 var flagListenMode bool
@@ -25,13 +22,13 @@ func init() {
 func main() {
 	flag.Parse()
 
-	if !flagListenMode {
-		err := Client(flagAddress)
+	if flagListenMode {
+		err := Server()
 		if err != nil {
 			panic(err)
 		}
 	} else {
-		err := Server()
+		err := Client(flagAddress)
 		if err != nil {
 			panic(err)
 		}
@@ -56,74 +53,6 @@ func Client(serverAddr string) error {
 				fmt.Println("SEARCHFORME Error with", conn, err)
 			}
 		}()
-	}
-}
-
-func SetupInterfaces(sessionID SessionID, serverAddr string) error {
-	for {
-		if !hasSession(sessionID) {
-			fmt.Println("STOPPING SCAN")
-			return nil
-		}
-		ifaces, ifaceErr := net.Interfaces()
-		if ifaceErr != nil {
-			return ifaceErr
-		}
-		tcpServerAddr, serverErr := net.ResolveTCPAddr("tcp", serverAddr)
-		if serverErr != nil {
-			return serverErr
-		}
-		for _, iface := range ifaces {
-			session := getSession(sessionID)
-			var active bool = false
-			session.lock.Lock()
-			for _, conn := range session.conns {
-				if iface.Name == conn.(*TcpConnection).iface {
-					active = true
-					break
-				}
-			}
-			session.lock.Unlock()
-			if active {
-				continue
-			}
-			addrs, addrErr := iface.Addrs()
-			if addrErr != nil {
-				return addrErr
-			}
-			for _, addr := range addrs {
-				fmt.Println("ATTEMPTING", iface, addr)
-				fmt.Println("serverAddr: ", serverAddr)
-				ip, _, ipErr := net.ParseCIDR(addr.String())
-				if ipErr != nil {
-					fmt.Println(ipErr)
-					continue
-				}
-				tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
-				if ip.IsLinkLocalMulticast() {
-					continue
-				}
-				if localErr != nil {
-					fmt.Println(localErr)
-					continue
-				}
-				fmt.Println("tcpLocalAddr: ", tcpLocalAddr)
-				conn, err := net.DialTCP("tcp", tcpLocalAddr, tcpServerAddr)
-				if err != nil {
-					fmt.Println(err)
-					continue
-				}
-				connection := &TcpConnection{
-					iface: iface.Name,
-					conn:  conn,
-				}
-				fmt.Println(ClientCreateServerConnection(connection, sessionID))
-				data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant}}})
-				getSession(sessionID).redundant = flagRedundant
-				go getSession(sessionID).sendOnAll(data)
-			}
-		}
-		time.Sleep(time.Second * time.Duration(flagIfacePoll))
 	}
 }
 

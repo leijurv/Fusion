@@ -49,7 +49,7 @@ func (sess *Session) sendPacket(sent *Sent) {
 		connSelection = available[ind] // do this step in lock
 	}
 
-	sent.sentOn = append(sent.sentOn, connSelection)
+	sent.sentOn = append(sent.sentOn, connSelection) // TODO lock
 	sent.date = time.Now().UnixNano()
 	sess.lock.Unlock()
 
@@ -67,7 +67,12 @@ func (sess *Session) sendOnAll(serialized []byte) {
 }
 
 func (sess *Session) listenSSH() error {
+	defer sess.kill() // guarantee
 	for {
+		if uint64(sess.sessionID) == 0 {
+			fmt.Println("listenssh dying because session killed")
+			return nil
+		}
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
@@ -75,51 +80,22 @@ func (sess *Session) listenSSH() error {
 			go sess.kill()
 			return err
 		}
+		buf = buf[:n]
 		if len(sess.conns) == 0 {
 			fmt.Println("listenssh waiting for connections...  ", sess.sessionID)
 		}
 		for len(sess.conns) == 0 { // no point in reading from ssh if the data has nowhere to go
 			time.Sleep(10 * time.Millisecond) // block until nonempty
 			if uint64(sess.sessionID) == 0 {
-				fmt.Println("listenssh dying because session killed")
+				fmt.Println("listenssh dying because session killed (waiting subloop)")
 				return nil
 			}
 		}
 		fmt.Println("Read", n, "bytes from ssh")
-		if !RAND_REORDER {
-			sess.sendPacket(sess.wrap(buf[:n]))
+		if RAND_REORDER {
+			randomize(buf, sess)
 		} else {
-			buf = buf[:n]
-			if len(buf) < 10 {
-				fmt.Println(len(buf), "too small to split")
-				sess.sendPacket(sess.wrap(buf))
-				continue
-			}
-
-			parts := 5
-			partSize := len(buf) / parts
-
-			fmt.Println(len(buf), "gonna split")
-			packets := make([]*Sent, parts+1)
-			totalSize := 0
-			for i := 0; i < parts; i++ {
-				tmp := buf[i*partSize : (i+1)*partSize]
-				totalSize += len(tmp)
-				packets[i] = sess.wrap(tmp)
-			}
-			tmp := buf[parts*partSize:]
-			packets[parts] = sess.wrap(tmp)
-			totalSize += len(tmp)
-			if len(buf) != totalSize {
-				fmt.Println("Expected len ", len(buf), "got", totalSize, "packetslen", len(packets))
-				panic("") // somehow the splitter and reorderer ended up with the wrong number of total bytes
-			}
-
-			rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano()))
-			perm := rSrc.Perm(len(packets))
-			for i := 0; i < len(perm); i++ {
-				sess.sendPacket(packets[perm[i]])
-			}
+			sess.sendPacket(sess.wrap(buf))
 		}
 		if n < BUF_SIZE/5 {
 			time.Sleep(15 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
@@ -132,17 +108,22 @@ func (sess *Session) addConnAndListen(conn Connection) {
 	defer sess.lock.Unlock()
 	sess.conns = append(sess.conns, conn)
 	go func() {
+		defer sess.removeConn(conn)
 		err := connListen(sess, conn)
-		if err != nil {
-			fmt.Println("conn listen err", err)
-			sess.removeConn(conn)
-		}
+		fmt.Println("conn listen err", err)
 	}()
 }
 
 func (sess *Session) writeSSH(data []byte) {
 	fmt.Println("Sending", len(data), "bytes to ssh")
-	(*sess.sshConn).Write(data)
+	n, err := (*sess.sshConn).Write(data)
+	if n != len(data) {
+		panic("whatt")
+	}
+	if err != nil {
+		fmt.Println("SSH write err", err, "killing session", sess.sessionID)
+		go sess.kill()
+	}
 }
 
 func connListen(sess *Session, conn Connection) error {

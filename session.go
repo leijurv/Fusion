@@ -17,7 +17,7 @@ type SessionID uint64
 type Sent struct {
 	seq     uint32
 	data    *[]byte
-	sentOn  []Connection
+	sentOn  []Connection // TODO lock
 	date    int64
 	session *Session
 }
@@ -117,6 +117,7 @@ func (sess *Session) kill() {
 	sess.sessionID = SessionID(0) // kill timer
 }
 func (sess *Session) timer() {
+	defer sess.kill() // guarantee
 	id := sess.sessionID
 	ticksWithoutConns := 0
 	for uint64(sess.sessionID) != 0 {
@@ -136,7 +137,7 @@ func (sess *Session) timer() {
 	fmt.Println("Timer exiting for", id)
 }
 func (sess *Session) tick() {
-	sess.lock.Lock()
+	sess.lock.Lock() // TODO do we need this lock or is just incomingLock sufficient
 	defer sess.lock.Unlock()
 	sess.incomingLock.Lock()
 	defer sess.incomingLock.Unlock()
@@ -149,7 +150,7 @@ func (sess *Session) tick() {
 	}
 	fmt.Println("Sending tick", timestamp, keys, sess.incomingSeq)
 	data := marshal(&packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}})
-	go sess.sendOnAll(data)
+	go sess.sendOnAll(data) //in new goroutine because locks
 }
 func (sess *Session) removeConn(conn Connection) {
 	sess.lock.Lock()
@@ -164,11 +165,10 @@ func (sess *Session) removeConn(conn Connection) {
 	fmt.Println(conn, "not present in", sess.conns)
 	panic("conn could not be removed")
 }
-func (sess *Session) checkInflight() {
+func (sess *Session) checkInflight() { // *sheds tear* it's... beautiful
 	for {
 		data, ok := sess.inflight[sess.incomingSeq]
 		if !ok {
-			//fmt.Println("Still waiting on", sess.incomingSeq)
 			return
 		}
 		sess.writeSSH(*data)
@@ -197,7 +197,7 @@ func (sess *Session) onReceiveData(from Connection, sequenceID uint32, data []by
 	sess.inflight[sequenceID] = &data
 	sess.checkInflight()
 }
-func stillActiveIn(conn Connection, sess *Session) bool {
+func active(conn Connection, sess *Session) bool {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {
@@ -261,7 +261,7 @@ func (sess *Session) onReceiveStatus(incomingSeq uint32, timestamp int64, inflig
 		diff := time.Now().UnixNano() - sent.date
 		stillActive := false
 		for _, conn := range sent.sentOn {
-			if stillActiveIn(conn, sess) {
+			if active(conn, sess) {
 				stillActive = true
 			}
 		}
