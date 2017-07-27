@@ -58,7 +58,9 @@ func (conn *TcpConnection) writeloop() {
 			conn.lock.Lock()
 			defer conn.lock.Unlock()
 			conn.closed = err
-			close(conn.outChan)
+			if conn.running {
+				close(conn.outChan)
+			}
 			conn.running = false
 			fmt.Println("closing", conn.conn, "because", err)
 			go conn.Close()
