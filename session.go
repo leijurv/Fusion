@@ -247,8 +247,8 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		_, ok := sess.outgoing[inflight[j]]
 		if ok {
 			fmt.Println("Inflight prune", inflight[j])
+			delete(sess.outgoing, inflight[j])
 		}
-		delete(sess.outgoing, inflight[j])
 	}
 
 	for seq := incomingSeq; seq < maxReceived; seq++ {

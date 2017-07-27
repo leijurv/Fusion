@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	BUF_SIZE     = 65536
-	RAND_REORDER = false
+	BUF_SIZE     = 65536 // TODO figure out what the optimal would be
+	RAND_REORDER = false // TODO cli option
 )
 
 func (sess *Session) sendPacket(sent *Sent) {
@@ -129,7 +129,7 @@ func (sess *Session) listenSSH() error {
 		buf = buf[:n]
 		if len(sess.conns) == 0 {
 			fmt.Println("listenssh waiting for connections...  ", sess.sessionID)
-		}
+		} //TODO is it ok to do len(sess.conns) without lock? i think it's fine but not certain... we aren't iterating, reading, or modifying so probably
 		for len(sess.conns) == 0 { // no point in reading from ssh if the data has nowhere to go
 			time.Sleep(10 * time.Millisecond) // block until nonempty
 			if uint64(sess.sessionID) == 0 {
@@ -143,9 +143,9 @@ func (sess *Session) listenSSH() error {
 		} else {
 			sess.sendPacket(sess.wrap(buf))
 		}
-		if n < BUF_SIZE/5 { //TODO /5 and 15* should be consts
+		/*if n < BUF_SIZE/5 { //TODO /5 and 15* should be consts
 			time.Sleep(15 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
-		}
+		} changed my mind this is a bad idea*/
 	}
 }
 
