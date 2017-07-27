@@ -11,6 +11,7 @@ type Connection interface {
 	Read(data []byte) (int, error)
 	ReadFull(data []byte) error
 	Write(data []byte) error
+	WriteNonBlocking(data []byte) (bool, error)
 	Close()
 	LocalAddr() net.Addr
 }
@@ -32,20 +33,38 @@ func (conn *TcpConnection) ReadFull(data []byte) error {
 	_, b := io.ReadFull(conn.conn, data)
 	return b
 }
-func (conn *TcpConnection) Write(data []byte) error {
+func (conn *TcpConnection) WriteNonBlocking(data []byte) (bool, error) {
 	conn.lock.Lock()
 	defer conn.lock.Unlock()
 	if conn.closed != nil {
-		return conn.closed // if the writeloop has encountered an error, return it here
+		return false, conn.closed // if the writeloop has encountered an error, return it here
 	}
 	if !conn.running { // conn.closed == nil && !conn.running means it hasn't started yet
 		conn.start()
 	}
 	select {
 	case conn.outChan <- data:
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+func (conn *TcpConnection) Write(data []byte) error {
+	conn.lock.Lock()
+	if conn.closed != nil {
+		conn.lock.Unlock()
+		return conn.closed // if the writeloop has encountered an error, return it here
+	}
+	if !conn.running { // conn.closed == nil && !conn.running means it hasn't started yet
+		conn.start()
+	}
+	select {
+	case conn.outChan <- data: // this does not block
+		conn.lock.Unlock()
 		//fmt.Println("Wrote without blocking yay")
 	default:
-		conn.outChan <- data
+		conn.lock.Unlock()
+		conn.outChan <- data // this is blocking io so unlock beforehand
 		fmt.Println("Wrote with blocking =(")
 	}
 	return nil
