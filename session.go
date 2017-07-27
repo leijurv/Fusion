@@ -190,10 +190,10 @@ func (sess *Session) onReceiveData(from Connection, sequenceID uint32, data []by
 		return
 	}
 	if sess.incomingSeq > sequenceID {
-		fmt.Println("Dupe somehow? expecting", sess.incomingSeq, "got", sequenceID, "from", from.(*TcpConnection).conn.LocalAddr())
+		fmt.Println("Dupe somehow? expecting", sess.incomingSeq, "got", sequenceID, "from", from.LocalAddr())
 		return
 	}
-	fmt.Println("Out of order, expecting", sess.incomingSeq, "got", sequenceID, "from", from.(*TcpConnection).conn.LocalAddr())
+	fmt.Println("Out of order, expecting", sess.incomingSeq, "got", sequenceID, "from", from.LocalAddr())
 	sess.inflight[sequenceID] = &data
 	sess.checkInflight()
 }
