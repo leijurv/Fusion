@@ -33,7 +33,7 @@ func (sess *Session) sendPacket(sent *Sent) {
 	//TODO add optimizations like:
 	//if sentOn is empty, just pick a connection at random
 	//if there is 1 connection, don't use the random number generator, just go ahead and send it
-	available := make([]Connection, 0)
+	avail := make([]Connection, 0)
 
 	alreadyUsedMap := make(map[Connection]bool)
 	for i := 0; i < len(sent.sentOn); i++ {
@@ -43,11 +43,10 @@ func (sess *Session) sendPacket(sent *Sent) {
 	for i := 0; i < len(sess.conns); i++ {
 		_, ok := alreadyUsedMap[sess.conns[i]]
 		if !ok {
-			available = append(available, sess.conns[i])
+			avail = append(avail, sess.conns[i])
 		}
 	}
-	var connSelection Connection
-	if len(available) == 0 {
+	if len(avail) == 0 {
 		if len(sess.conns) == 0 {
 			//this doesn't need to return an error
 			//if there are no connections, it can just not send
@@ -56,31 +55,38 @@ func (sess *Session) sendPacket(sent *Sent) {
 			fmt.Println("OH NO UH IDK WHAT TO DO")
 			return
 		}
-		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(sess.conns))
-		_, ok := sess.conns[ind].(*TcpConnection)
-		if ok {
-			fmt.Println("", ind, sess.conns[ind].(*TcpConnection).conn.LocalAddr(), sess.conns[ind].(*TcpConnection).conn.RemoteAddr())
-		} else {
-			fmt.Println("sel not tcp")
-		}
-		connSelection = sess.conns[ind] // do this step in lock
-	} else {
-		ind := mrand.New(mrand.NewSource(time.Now().UnixNano())).Intn(len(available))
-		_, ok := sess.conns[ind].(*TcpConnection)
-		if ok {
-			fmt.Println("Selected conn", available[ind].(*TcpConnection).conn.LocalAddr(), available[ind].(*TcpConnection).conn.RemoteAddr())
-		} else {
-			fmt.Println("selected not tcp")
-		}
-		connSelection = available[ind] // do this step in lock
+		avail = sess.conns // if we've already tried them all, try them all again!
 	}
-
+	rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	perm := rSrc.Perm(len(avail))
+	wrote := false
+	var connSelection Connection
+	for i := 0; i < len(avail); i++ {
+		connSelection = avail[perm[i]]
+		ok, _ := connSelection.WriteNonBlocking(*sent.data)
+		if ok {
+			wrote = true
+		}
+	}
+	if !wrote {
+		fmt.Println("Failed, picking at random")
+		connSelection = avail[rSrc.Intn(len(avail))]
+	}
+	_, ok := connSelection.(*TcpConnection)
+	if ok {
+		fmt.Println("Selected", wrote, "conn", connSelection.(*TcpConnection).conn.LocalAddr(), connSelection.(*TcpConnection).conn.RemoteAddr())
+	} else {
+		fmt.Println("selected not tcp")
+	}
 	sent.sentOn = append(sent.sentOn, connSelection) // TODO lock
 	sent.date = time.Now().UnixNano()
 	sess.lock.Unlock() // no blocking io in lock
 
-	connSelection.Write(*sent.data) // haha yes
-	// do actual write outside of lock
+	if !wrote {
+		fmt.Println("No connections were non blocking, falling back to random blocking")
+		connSelection.Write(*sent.data) // haha yes
+		// do actual write outside of lock
+	}
 }
 func (sess *Session) sendOnAll(serialized []byte) {
 	fmt.Println("Sending out packet to", len(sess.conns), "destinations")

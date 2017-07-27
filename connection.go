@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -26,10 +27,16 @@ type TcpConnection struct {
 }
 
 func (conn *TcpConnection) Read(data []byte) (int, error) {
+	if conn.closed != nil {
+		return 0, conn.closed
+	}
 	a, b := conn.conn.Read(data)
 	return a, b
 }
 func (conn *TcpConnection) ReadFull(data []byte) error {
+	if conn.closed != nil {
+		return conn.closed
+	}
 	_, b := io.ReadFull(conn.conn, data)
 	return b
 }
@@ -90,6 +97,9 @@ func (conn *TcpConnection) Close() {
 	conn.conn.Close()
 	conn.lock.Lock()
 	defer conn.lock.Unlock()
+	if conn.closed == nil {
+		conn.closed = errors.New("close requested")
+	}
 	run := conn.running
 	conn.running = false
 	select {
