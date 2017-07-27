@@ -22,6 +22,9 @@ func (sess *Session) sendPacket(sent *Sent) {
 		return
 	}
 	sess.lock.Lock()
+	//TODO add optimizations like:
+	//if sentOn is empty, just pick a connection at random
+	//if there is 1 connection, don't use the random number generator, just go ahead and send it
 	available := make([]Connection, 0)
 
 	alreadyUsedMap := make(map[Connection]bool)
