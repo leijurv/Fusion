@@ -11,6 +11,11 @@ message Packet {
   }
 }
 
+message UDPData {
+	Data data = 1;
+	Confirm sessionInterface = 2;
+}
+
 message Data {
   uint32 sequenceID = 1;
   bytes content = 2;
