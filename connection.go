@@ -7,6 +7,14 @@ import (
 	"sync"
 )
 
+type Connection interface {
+	Read(data []byte) (int, error)
+	ReadFull(data []byte) error
+	Write(data []byte) error
+	Close()
+	LocalAddr() net.Addr
+}
+
 type TcpConnection struct {
 	iface   string
 	conn    net.Conn
@@ -84,12 +92,4 @@ func (conn *TcpConnection) Close() {
 }
 func (conn *TcpConnection) LocalAddr() net.Addr {
 	return conn.conn.LocalAddr()
-}
-
-type Connection interface {
-	Read(data []byte) (int, error)
-	ReadFull(data []byte) error
-	Write(data []byte) error
-	Close()
-	LocalAddr() net.Addr
 }
