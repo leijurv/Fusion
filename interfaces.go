@@ -6,7 +6,6 @@ import (
 
 	"crypto/sha256"
 	"encoding/binary"
-	"fmt"
 	"github.com/howardstark/fusion/protos"
 	log "github.com/sirupsen/logrus"
 )
@@ -23,12 +22,12 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 		}
 		ifaces, ifaceErr := net.Interfaces()
 		if ifaceErr != nil {
-			log.Error("Stopping scan because iface err", ifaceErr)
+			log.WithError(ifaceErr).Error("Stopping scan because iface err")
 			return ifaceErr
 		}
 		tcpServerAddr, tcpServerErr := net.ResolveTCPAddr("tcp", serverAddr)
 		if tcpServerErr != nil {
-			log.Error("Stopping scan because server err", tcpServerErr)
+			log.WithError(tcpServerErr).Error("Stopping scan because server err")
 			return tcpServerErr
 		}
 		////var udpServerAddr *net.UDPAddr
@@ -61,7 +60,7 @@ func startConnectionFromIface(session *Session, iface net.Interface, tcpServerAd
 	session.lock.Unlock()
 	addrs, addrErr := iface.Addrs()
 	if addrErr != nil {
-		log.Error("Stopping scan because addr err", addrErr)
+		log.WithError(addrErr).Error("Stopping scan because addr err")
 		return addrErr
 	}
 	connection := buildConnectionFromAddrs(addrs, tcpServerAddr, iface)
@@ -72,7 +71,7 @@ func startConnectionFromIface(session *Session, iface net.Interface, tcpServerAd
 	log.WithFields(log.Fields{
 		"conn":    connection,
 		"sess-id": session.sessionID,
-	}).Error("Could not create conn... ", connErr)
+	}).WithError(connErr).Error("Could not create conn...")
 
 	data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant}}})
 	getSession(session.sessionID).redundant = flagRedundant
@@ -88,15 +87,17 @@ func buildConnectionFromAddrs(addrs []net.Addr, tcpServerAddr *net.TCPAddr, ifac
 		}).Debug("Attempting connection")
 		ip, _, ipErr := net.ParseCIDR(addr.String())
 		if ipErr != nil {
-			fmt.Println(ipErr)
+			log.WithError(ipErr).Error("Could not parse CIDR")
 			continue
 		}
-		tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
 		if ip.IsLinkLocalMulticast() {
 			continue
 		}
+		tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
 		if localErr != nil {
-			fmt.Println(localErr)
+			log.WithFields(log.Fields{
+				"addr": ip.String(),
+			}).WithError(localErr).Error("Could not resolve tcp address")
 			continue
 		}
 		log.WithField("local-addr", tcpLocalAddr).Debug("Dialing TCP conn...")

@@ -82,7 +82,7 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 	}
 	packet, packetErr, _ := readProtoPacket(conn)
 	if packetErr != nil {
-		log.Error("Could not read proto packet... ", packetErr)
+		log.WithError(packetErr).Error("Could not read proto packet...")
 		return packetErr
 	}
 	_, ok := packet.GetBody().(*packets.Packet_Confirm)
