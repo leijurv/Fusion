@@ -51,8 +51,6 @@ func main() {
 			}).Warning("While in listen mode, the redundant flags will have no effect.")
 			return
 		}
-	}
-	if flagListenMode {
 		err := Server()
 		if err != nil {
 			panic(err)

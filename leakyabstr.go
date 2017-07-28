@@ -2,11 +2,11 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"time"
 
 	"github.com/howardstark/fusion/protos"
+	log "github.com/sirupsen/logrus"
 )
 
 func ServerReceivedClientConnection(conn net.Conn) error {
@@ -14,17 +14,22 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	tcp := &Connection{conn: conn}
 	packet, packetErr, _ := readProtoPacket(tcp)
 	if packetErr != nil {
-		fmt.Println("Read err", packetErr)
+		log.Error("Could not read proto packet... ", packetErr)
 		return packetErr
 	}
 	_, ok := packet.GetBody().(*packets.Packet_Init)
 	if !ok {
-		fmt.Println("thats NOT a control packet")
-		return errors.New("naughty")
+		log.Error("Expected control packet, instead received: ", packet.GetBody())
+		return errors.New("Expected control packet")
 	}
 	id := SessionID(packet.GetInit().GetSession())
 	inter := packet.GetInit().GetInterface()
-	fmt.Println("Server received connection", conn, " for session id", id, "from remote", conn.RemoteAddr(), "and local", conn.LocalAddr(), "and interface", packet.GetInit().GetInterface())
+	log.WithFields(log.Fields{
+		"conn":  conn,
+		"id":    id,
+		"addr":  conn.RemoteAddr(),
+		"iface": packet.GetInit().GetInterface(),
+	}).Debug("Server received connection")
 
 	err := tcp.Write(marshal(&packets.Packet{
 		Body: &packets.Packet_Confirm{
@@ -43,16 +48,16 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
-		fmt.Println("Server making new ssh connection for session id", id)
+		log.WithField("id", id).Debug("Server is initializing new ssh conn")
 		sshConn, err := net.Dial("tcp", "localhost:22")
 		if err != nil {
-			fmt.Println("localhost dial err", err)
+			log.WithError(err).Error("Localhost dial error")
 			return err
 		}
 		sess.sshConn = &sshConn
 		go sess.listenSSH()
 	}
-	fmt.Println("Adding")
+	log.Debug("Adding connection")
 	go sess.addConnAndListen(tcp)
 	return nil
 }
@@ -77,17 +82,22 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 	}
 	packet, packetErr, _ := readProtoPacket(conn)
 	if packetErr != nil {
-		fmt.Println("Read err", packetErr)
+		log.Error("Could not read proto packet... ", packetErr)
 		return packetErr
 	}
 	_, ok := packet.GetBody().(*packets.Packet_Confirm)
 	if !ok {
-		fmt.Println("thats NOT a confirm packet")
-		return errors.New("naughty")
+		log.Error("Expected confirm packet, instead received: ", packet.GetBody())
+		return errors.New("Expected confirm packet")
 	}
 	if packet.GetConfirm().GetSession() != uint64(id) || packet.GetConfirm().GetInterface() != inter {
 		err = errors.New("ID response mismatch " + string(packet.GetConfirm().GetSession()) + "  " + string(id) + " " + string(packet.GetConfirm().GetInterface()) + "  " + string(inter))
-		fmt.Println(err)
+		log.WithFields(log.Fields{
+			"sess":     packet.GetConfirm().GetSession(),
+			"id":       id,
+			"iface":    packet.GetConfirm().GetInterface(),
+			"iface id": inter,
+		}).Error(err)
 		return err
 	}
 	//fmt.Println("ITS WORKING OKAY??")
@@ -96,17 +106,23 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 	sess, ok := sessions[id]
 	if !ok {
 		err = errors.New("Existing ssh conn for id '" + string(id) + "' not found...")
-		fmt.Println(err)
+		log.Error(err)
 		return err
 	}
-	fmt.Println("Client creating new server conn for session id", id, "and", conn.conn)
+	log.WithFields(log.Fields{
+		"id":   id,
+		"conn": conn.conn,
+	}).Info("Client creating new server conn")
 	go sess.addConnAndListen(conn) // new goroutine because sessionslock
 	return nil
 }
 
 func ClientReceivedSSHConnection(ssh net.Conn) SessionID {
 	sess := newSession()
-	fmt.Println("Client received new ssh conn", ssh, "and gave it id ", sess.sessionID)
+	log.WithFields(log.Fields{
+		"ssh conn": ssh,
+		"id":       sess.sessionID,
+	}).Info("Client received new ssh conn")
 	sess.sshConn = &ssh
 	go sess.listenSSH()
 	return sess.sessionID
