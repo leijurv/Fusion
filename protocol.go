@@ -82,7 +82,7 @@ func marshal(packet *packets.Packet) []byte {
 	packetData = append(packetLen, packetData...)
 	return packetData
 }
-func readProtoPacket(conn Connection) (packets.Packet, error, []byte) {
+func readProtoPacket(conn *Connection) (packets.Packet, error, []byte) {
 	var packet packets.Packet
 	packetLen := make([]byte, 4)
 	lenErr := conn.ReadFull(packetLen)

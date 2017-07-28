@@ -17,7 +17,7 @@ type SessionID uint64
 type Sent struct {
 	seq     uint32
 	data    *[]byte
-	sentOn  []Connection // TODO lock
+	sentOn  []*Connection // TODO lock
 	date    int64
 	session *Session
 }
@@ -26,7 +26,7 @@ type Session struct {
 	lock        sync.Mutex // todo rwmutex
 	sessionID   SessionID
 	sshConn     *net.Conn
-	conns       []Connection
+	conns       []*Connection
 	outgoingSeq uint32
 	//
 	incomingLock       sync.Mutex // this lock is for inflight, incomingSeq, and highestReceivedSeq
@@ -152,7 +152,7 @@ func (sess *Session) tick() {
 	data := marshal(&packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}})
 	go sess.sendOnAll(data) //in new goroutine because locks
 }
-func (sess *Session) removeConn(conn Connection) {
+func (sess *Session) removeConn(conn *Connection) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {
@@ -176,7 +176,7 @@ func (sess *Session) checkInflight() { // *sheds tear* it's... beautiful
 		sess.incomingSeq++
 	}
 }
-func (sess *Session) onReceiveData(from Connection, packet *packets.Data) {
+func (sess *Session) onReceiveData(from *Connection, packet *packets.Data) {
 	sequenceID := packet.GetSequenceID()
 	data := packet.GetContent()
 	sess.incomingLock.Lock()
@@ -199,7 +199,7 @@ func (sess *Session) onReceiveData(from Connection, packet *packets.Data) {
 	sess.inflight[sequenceID] = &data
 	sess.checkInflight()
 }
-func active(conn Connection, sess *Session) bool {
+func active(conn *Connection, sess *Session) bool {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {

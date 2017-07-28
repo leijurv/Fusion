@@ -8,17 +8,9 @@ import (
 	"sync"
 )
 
-type Connection interface {
-	Read(data []byte) (int, error)
-	ReadFull(data []byte) error
-	Write(data []byte) error
-	WriteNonBlocking(data []byte) (bool, error)
-	Close()
-	LocalAddr() net.Addr
-}
-
-type TcpConnection struct {
+type Connection struct {
 	iface   string
+	ifaceID uint64
 	conn    net.Conn
 	outChan chan []byte
 	running bool
@@ -26,21 +18,23 @@ type TcpConnection struct {
 	lock    sync.Mutex
 }
 
-func (conn *TcpConnection) Read(data []byte) (int, error) {
+func (conn *Connection) Read(data []byte) (int, error) {
 	if conn.closed != nil {
 		return 0, conn.closed
 	}
 	a, b := conn.conn.Read(data)
 	return a, b
 }
-func (conn *TcpConnection) ReadFull(data []byte) error {
+
+func (conn *Connection) ReadFull(data []byte) error {
 	if conn.closed != nil {
 		return conn.closed
 	}
 	_, b := io.ReadFull(conn.conn, data)
 	return b
 }
-func (conn *TcpConnection) WriteNonBlocking(data []byte) (bool, error) {
+
+func (conn *Connection) WriteNonBlocking(data []byte) (bool, error) {
 	conn.lock.Lock()
 	defer conn.lock.Unlock()
 	if conn.closed != nil {
@@ -56,7 +50,8 @@ func (conn *TcpConnection) WriteNonBlocking(data []byte) (bool, error) {
 		return false, nil
 	}
 }
-func (conn *TcpConnection) Write(data []byte) error {
+
+func (conn *Connection) Write(data []byte) error {
 	ok, err := conn.WriteNonBlocking(data)
 	if err != nil {
 		return err
@@ -67,12 +62,14 @@ func (conn *TcpConnection) Write(data []byte) error {
 	}
 	return nil
 }
-func (conn *TcpConnection) start() {
+
+func (conn *Connection) start() {
 	conn.outChan = make(chan []byte, 4)
 	conn.running = true
 	go conn.writeloop()
 }
-func (conn *TcpConnection) writeloop() {
+
+func (conn *Connection) writeloop() {
 	for {
 		data := <-conn.outChan
 		a, err := conn.conn.Write(data)
@@ -93,7 +90,8 @@ func (conn *TcpConnection) writeloop() {
 		}
 	}
 }
-func (conn *TcpConnection) Close() {
+
+func (conn *Connection) Close() {
 	conn.conn.Close()
 	conn.lock.Lock()
 	defer conn.lock.Unlock()
@@ -110,6 +108,15 @@ func (conn *TcpConnection) Close() {
 		close(conn.outChan)
 	}
 }
-func (conn *TcpConnection) LocalAddr() net.Addr {
+
+func (conn *Connection) LocalAddr() net.Addr {
 	return conn.conn.LocalAddr()
+}
+
+func (conn *Connection) GetInterfaceID() uint64 {
+	return conn.ifaceID
+}
+
+func (conn *Connection) GetInterfaceName() string {
+	return conn.iface
 }

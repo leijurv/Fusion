@@ -33,9 +33,9 @@ func (sess *Session) sendPacket(sent *Sent) {
 	//TODO add optimizations like:
 	//if sentOn is empty, just pick a connection at random
 	//if there is 1 connection, don't use the random number generator, just go ahead and send it
-	avail := make([]Connection, 0)
+	avail := make([]*Connection, 0)
 
-	alreadyUsedMap := make(map[Connection]bool)
+	alreadyUsedMap := make(map[*Connection]bool)
 	for i := 0; i < len(sent.sentOn); i++ {
 		alreadyUsedMap[sent.sentOn[i]] = true
 	}
@@ -73,12 +73,7 @@ func (sess *Session) sendPacket(sent *Sent) {
 	if !wrote {
 		fmt.Println("Failed, picking at random")
 	}
-	_, ok := connSelection.(*TcpConnection)
-	if ok {
-		fmt.Println("Selected", wrote, "conn", connSelection.(*TcpConnection).conn.LocalAddr(), connSelection.(*TcpConnection).conn.RemoteAddr())
-	} else {
-		fmt.Println("selected not tcp")
-	}
+	fmt.Println("Selected", wrote, "conn", connSelection.conn.LocalAddr(), connSelection.conn.RemoteAddr())
 	sent.sentOn = append(sent.sentOn, connSelection) // TODO lock
 	sent.date = time.Now().UnixNano()
 	sess.lock.Unlock() // no blocking io in lock
@@ -103,7 +98,7 @@ func (sess *Session) sendOnAll(serialized []byte) {
 	for i := 0; i < count; i++ {
 		//fmt.Println("Writing")
 		c := sess.conns[i]
-		go func(conn Connection, serialized []byte) {
+		go func(conn *Connection, serialized []byte) {
 			done <- conn.Write(serialized) // goroutine is fine because order doesn't matter
 		}(c, serialized)
 	}
@@ -165,7 +160,7 @@ func (sess *Session) listenSSH() error {
 	}
 }
 
-func (sess *Session) addConnAndListen(conn Connection) {
+func (sess *Session) addConnAndListen(conn *Connection) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	sess.conns = append(sess.conns, conn)
@@ -188,18 +183,11 @@ func (sess *Session) writeSSH(data []byte) {
 	}
 }
 
-func connListen(sess *Session, conn Connection) error {
+func connListen(sess *Session, conn *Connection) error {
 	fmt.Println("Beginning conn listen")
 	for {
 		//fmt.Println("Waiting for packet...")
-		_, ok := conn.(*TcpConnection)
-		if ok {
-			conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		} else {
-			for i := 0; i < 10; i++ {
-				fmt.Println("\n\nTHIS ISNT A TCP CONNECTION PLEASE IMPLEMENT READ DEADLINES ITS net.Conn.SetReadDeadline PLSTHX\n\n")
-			}
-		}
+		conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		packet, packetErr, rawPacket := readProtoPacket(conn)
 		//fmt.Println("Got packet...")
 		if packetErr != nil {

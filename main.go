@@ -6,16 +6,32 @@ import (
 	"net"
 )
 
+type stringArrayVar []string
+
+func (s *stringArrayVar) String() string {
+	return "we probably don't need this?"
+}
+
+func (s *stringArrayVar) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 var flagListenMode bool
 var flagAddress string
 var flagIfacePoll int
 var flagRedundant bool
+var (
+	flagUDPInterfaces = new(stringArrayVar)
+)
 
 func init() {
-	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? Improves reliability.")
+	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? (Improves reliability)")
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
 	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
+	flag.Var(flagUDPInterfaces, "udp-interface", "The name of the interface you wish to use as UDP instead of TCP (This is not recommended for a single interface, as retrying on UDP will not be attempted")
+	flag.Var(flagUDPInterfaces, "ui", "Shorthand for the 'udp-interface' parameter. See 'udp-interface' for usage")
 	//flag.Memes
 }
 

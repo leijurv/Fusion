@@ -11,7 +11,7 @@ import (
 
 func ServerReceivedClientConnection(conn net.Conn) error {
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	tcp := &TcpConnection{conn: conn}
+	tcp := &Connection{conn: conn}
 	packet, packetErr, _ := readProtoPacket(tcp)
 	if packetErr != nil {
 		fmt.Println("Read err", packetErr)
@@ -57,8 +57,8 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	return nil
 }
 
-func ClientCreateServerConnection(conn Connection, id SessionID) error {
-	conn.(*TcpConnection).conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+func ClientCreateServerConnection(conn *Connection, id SessionID) error {
+	conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	inter := uint64(5021)
 	err := conn.Write(marshal(&packets.Packet{
 		Body: &packets.Packet_Init{
@@ -99,7 +99,7 @@ func ClientCreateServerConnection(conn Connection, id SessionID) error {
 		fmt.Println(err)
 		return err
 	}
-	fmt.Println("Client creating new server conn for session id", id, "and", conn.(*TcpConnection).conn)
+	fmt.Println("Client creating new server conn for session id", id, "and", conn.conn)
 	go sess.addConnAndListen(conn) // new goroutine because sessionslock
 	return nil
 }
