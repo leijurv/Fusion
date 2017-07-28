@@ -137,7 +137,7 @@ func (sess *Session) timer() {
 }
 func (sess *Session) tick() {
 	data := marshal(sess.StatusPacket())
-	sess.sendOnAll(data) //in new goroutine because locks
+	sess.sendOnAll(data) // not in new goroutine, should block.
 }
 func (sess *Session) StatusPacket() *packets.Packet {
 	sess.lock.Lock() // TODO do we need this lock or is just incomingLock sufficient
