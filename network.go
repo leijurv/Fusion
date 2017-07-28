@@ -19,20 +19,20 @@ const (
 	RAND_REORDER = false // TODO cli option
 )
 
-func (sess *Session) sendPacket(sent *Sent) {
+func (sess *Session) sendPacket(out *OutgoingPacket) {
 	if sess.redundant {
 		fmt.Println("SENDING REDUNDANT")
-		sess.sendOnAll(*sent.data)
-		sent.date = time.Now().UnixNano()
+		sess.sendOnAll(*out.data)
+		out.date = time.Now().UnixNano()
 		return
 	}
 	sess.lock.Lock()
 	if len(sess.conns) == 1 {
 		c := sess.conns[0]
-		sent.sentOn = append(sent.sentOn, c) // TODO lock
-		sent.date = time.Now().UnixNano()
+		out.sentOn = append(out.sentOn, c) // TODO lock
+		out.date = time.Now().UnixNano()
 		sess.lock.Unlock() // no blocking io in lock
-		c.Write(*sent.data)
+		c.Write(*out.data)
 		return
 	}
 	//TODO add optimizations like:
@@ -41,8 +41,8 @@ func (sess *Session) sendPacket(sent *Sent) {
 	avail := make([]Connection, 0)
 
 	alreadyUsedMap := make(map[Connection]bool)
-	for i := 0; i < len(sent.sentOn); i++ {
-		alreadyUsedMap[sent.sentOn[i]] = true
+	for i := 0; i < len(out.sentOn); i++ {
+		alreadyUsedMap[out.sentOn[i]] = true
 	}
 
 	for i := 0; i < len(sess.conns); i++ {
@@ -68,7 +68,7 @@ func (sess *Session) sendPacket(sent *Sent) {
 	connSelection := avail[rSrc.Intn(len(avail))]
 	for i := 0; i < len(avail); i++ {
 		c := avail[perm[i]]
-		ok, _ := c.WriteNonBlocking(*sent.data)
+		ok, _ := c.WriteNonBlocking(*out.data)
 		if ok {
 			wrote = true
 			connSelection = c
@@ -84,13 +84,13 @@ func (sess *Session) sendPacket(sent *Sent) {
 	} else {
 		fmt.Println("selected not tcp")
 	}
-	sent.sentOn = append(sent.sentOn, connSelection) // TODO lock
-	sent.date = time.Now().UnixNano()
+	out.sentOn = append(out.sentOn, connSelection) // TODO lock
+	out.date = time.Now().UnixNano()
 	sess.lock.Unlock() // no blocking io in lock
 
 	if !wrote {
 		fmt.Println("No connections were non blocking, falling back to random blocking")
-		connSelection.Write(*sent.data) // haha yes
+		connSelection.Write(*out.data) // haha yes
 		// do actual write outside of lock
 	}
 }

@@ -14,7 +14,7 @@ import (
 
 type SessionID uint64
 
-type Sent struct {
+type OutgoingPacket struct {
 	seq     uint32
 	data    *[]byte
 	sentOn  []Connection // TODO lock
@@ -35,7 +35,7 @@ type Session struct {
 	highestReceivedSeq uint32
 	//
 	outgoingLock sync.Mutex // this lock is ONLY for the outgoing map
-	outgoing     map[uint32]*Sent
+	outgoing     map[uint32]*OutgoingPacket
 	//
 	redundant bool
 }
@@ -67,7 +67,7 @@ func getSession(id SessionID) *Session {
 		sess = &Session{
 			sessionID: id,
 			inflight:  make(map[uint32]*[]byte),
-			outgoing:  make(map[uint32]*Sent),
+			outgoing:  make(map[uint32]*OutgoingPacket),
 		}
 		sessions[id] = sess
 		go sess.timer()
@@ -88,7 +88,7 @@ func newSession() *Session {
 	sess := &Session{
 		sessionID: ID,
 		inflight:  make(map[uint32]*[]byte),
-		outgoing:  make(map[uint32]*Sent),
+		outgoing:  make(map[uint32]*OutgoingPacket),
 	}
 	sessions[ID] = sess
 	go sess.timer()
@@ -260,14 +260,14 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		}
 		//seq is a gap in what they have received
 		//this means one connection is going faster than another
-		sent, ok := sess.outgoing[seq]
-		if !ok || sent == nil {
+		outPacket, ok := sess.outgoing[seq]
+		if !ok || outPacket == nil {
 			fmt.Println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n", seq, "\n\n\n\n\n\n\n\n\n\n\n\nWe already deleted from our outgoing, but now they want it again? I don't think so\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
 			break
 		}
-		diff := time.Now().UnixNano() - sent.date
+		diff := time.Now().UnixNano() - outPacket.date
 		stillActive := false
-		for _, conn := range sent.sentOn {
+		for _, conn := range outPacket.sentOn {
 			if active(conn, sess) {
 				stillActive = true
 			}
@@ -275,8 +275,8 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		//stillActive = false means it almost certainly isn't still in transit; the connection is just closed
 		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq, stillActive, "\n\n\n\n\n")
 		if !stillActive {
-			sent.date = time.Now().UnixNano() // wait a bit before doing this again
-			sess.sendOnAll(*sent.data)
+			outPacket.date = time.Now().UnixNano() // wait a bit before doing this again
+			sess.sendOnAll(*outPacket.data)
 		}
 
 	}

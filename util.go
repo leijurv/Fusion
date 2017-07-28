@@ -17,7 +17,7 @@ func randomize(buf []byte, sess *Session) {
 	partSize := len(buf) / parts
 
 	fmt.Println(len(buf), "gonna split")
-	packets := make([]*Sent, parts+1)
+	packets := make([]*OutgoingPacket, parts+1)
 	totalSize := 0
 	for i := 0; i < parts; i++ {
 		tmp := buf[i*partSize : (i+1)*partSize]

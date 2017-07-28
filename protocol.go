@@ -43,7 +43,7 @@ func dedup(packet packets.Packet, rawPacket []byte) bool {
 	packetDedup[hash] = true
 	return false
 }
-func (sess *Session) wrap(data []byte) *Sent {
+func (sess *Session) wrap(data []byte) *OutgoingPacket {
 	seq := sess.getOutgoingSeq()
 	//fmt.Println("Wrapping packet with seq", seq)
 	packet := packets.Packet{
@@ -58,14 +58,14 @@ func (sess *Session) wrap(data []byte) *Sent {
 	marshalled := marshal(&packet)
 	sess.outgoingLock.Lock()
 	defer sess.outgoingLock.Unlock()
-	sent := &Sent{
+	out := &OutgoingPacket{
 		seq:     seq,
 		data:    &marshalled,
 		session: sess,
 		date:    time.Now().UnixNano(),
 	}
-	sess.outgoing[seq] = sent
-	return sent
+	sess.outgoing[seq] = out
+	return out
 }
 func marshal(packet *packets.Packet) []byte {
 	packetData, packetErr := proto.Marshal(packet)
