@@ -10,24 +10,29 @@ import (
 )
 
 const (
-	BUF_SIZE     = 65536 // TODO figure out what the optimal would be
+	//BUF_SIZE is not determined by how fast or how often SSH sends out data, or how big. The connection to ssh is a localhost socket, which is fast as can be, and is not an issue.
+	//It also is not determined by TCP packet size. TCP packet max size is anywhere from 800 to 1400 to 1500 to 9000 to 65535. The OS is very very good and fast at splitting up writes into all the requisite TCP packets
+	//the real slow part is incoming and outgoing, and keeping track of all this data, all the goroutines and outgoing channels, etc. We want to have big chunks. At 10mbit, 64kb chunks result in ~20 per second. That's completely doable. Smaller chunks like the TCP max size on different networks would be really pushing it
+	BUF_SIZE = 65535 - 11 - 1 // encoding with protobuf into the Packet_Data results in 11 bytes added. when BUF_SIZE is 65536, we get packets up to 65547 in length.
+	//by limiting the post-wrapping length to less than 65535, we can encode the protobuf packet length into 2 bytes instead of 4.
+
 	RAND_REORDER = false // TODO cli option
 )
 
-func (sess *Session) sendPacket(sent *Sent) {
+func (sess *Session) sendPacket(out *OutgoingPacket) {
 	if sess.redundant {
 		fmt.Println("SENDING REDUNDANT")
-		sess.sendOnAll(*sent.data)
-		sent.date = time.Now().UnixNano()
+		sess.sendOnAll(*out.data)
+		out.date = time.Now().UnixNano()
 		return
 	}
 	sess.lock.Lock()
 	if len(sess.conns) == 1 {
 		c := sess.conns[0]
-		sent.sentOn = append(sent.sentOn, c) // TODO lock
-		sent.date = time.Now().UnixNano()
+		out.sentOn = append(out.sentOn, c) // TODO lock
+		out.date = time.Now().UnixNano()
 		sess.lock.Unlock() // no blocking io in lock
-		c.Write(*sent.data)
+		c.Write(*out.data)
 		return
 	}
 	//TODO add optimizations like:
@@ -36,8 +41,8 @@ func (sess *Session) sendPacket(sent *Sent) {
 	avail := make([]*Connection, 0)
 
 	alreadyUsedMap := make(map[*Connection]bool)
-	for i := 0; i < len(sent.sentOn); i++ {
-		alreadyUsedMap[sent.sentOn[i]] = true
+	for i := 0; i < len(out.sentOn); i++ {
+		alreadyUsedMap[out.sentOn[i]] = true
 	}
 
 	for i := 0; i < len(sess.conns); i++ {
@@ -63,7 +68,7 @@ func (sess *Session) sendPacket(sent *Sent) {
 	connSelection := avail[rSrc.Intn(len(avail))]
 	for i := 0; i < len(avail); i++ {
 		c := avail[perm[i]]
-		ok, _ := c.WriteNonBlocking(*sent.data)
+		ok, _ := c.WriteNonBlocking(*out.data)
 		if ok {
 			wrote = true
 			connSelection = c
@@ -74,13 +79,13 @@ func (sess *Session) sendPacket(sent *Sent) {
 		fmt.Println("Failed, picking at random")
 	}
 	fmt.Println("Selected", wrote, "conn", connSelection.conn.LocalAddr(), connSelection.conn.RemoteAddr())
-	sent.sentOn = append(sent.sentOn, connSelection) // TODO lock
-	sent.date = time.Now().UnixNano()
+	out.sentOn = append(out.sentOn, connSelection) // TODO lock
+	out.date = time.Now().UnixNano()
 	sess.lock.Unlock() // no blocking io in lock
 
 	if !wrote {
 		fmt.Println("No connections were non blocking, falling back to random blocking")
-		connSelection.Write(*sent.data) // haha yes
+		connSelection.Write(*out.data) // haha yes
 		// do actual write outside of lock
 	}
 }
@@ -154,9 +159,10 @@ func (sess *Session) listenSSH() error {
 		} else {
 			sess.sendPacket(sess.wrap(buf))
 		}
-		/*if n < BUF_SIZE/5 { //TODO /5 and 15* should be consts
-			time.Sleep(15 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
-		} changed my mind this is a bad idea*/
+		if n < BUF_SIZE/5 { //TODO /5 and 15* should be consts
+			time.Sleep(5 * time.Millisecond) //we only read less than 1/5 of the buffer, give ssh some time to chill
+		} //changed my mind this is a bad idea
+		//changed my mind this is a good idea
 	}
 }
 

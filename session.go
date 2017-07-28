@@ -14,7 +14,7 @@ import (
 
 type SessionID uint64
 
-type Sent struct {
+type OutgoingPacket struct {
 	seq     uint32
 	data    *[]byte
 	sentOn  []*Connection // TODO lock
@@ -35,7 +35,7 @@ type Session struct {
 	highestReceivedSeq uint32
 	//
 	outgoingLock sync.Mutex // this lock is ONLY for the outgoing map
-	outgoing     map[uint32]*Sent
+	outgoing     map[uint32]*OutgoingPacket
 	//
 	redundant bool
 }
@@ -49,8 +49,7 @@ var (
 func NewSessionID() SessionID {
 	b := make([]byte, 8)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		fmt.Println("Defaulting nonrandom session id 1", err)
-		return SessionID(420) // Sensible defaults amirite?
+		panic("unable to generate random session id")
 	}
 	return SessionID(binary.BigEndian.Uint64(b))
 }
@@ -68,7 +67,7 @@ func getSession(id SessionID) *Session {
 		sess = &Session{
 			sessionID: id,
 			inflight:  make(map[uint32]*[]byte),
-			outgoing:  make(map[uint32]*Sent),
+			outgoing:  make(map[uint32]*OutgoingPacket),
 		}
 		sessions[id] = sess
 		go sess.timer()
@@ -89,7 +88,7 @@ func newSession() *Session {
 	sess := &Session{
 		sessionID: ID,
 		inflight:  make(map[uint32]*[]byte),
-		outgoing:  make(map[uint32]*Sent),
+		outgoing:  make(map[uint32]*OutgoingPacket),
 	}
 	sessions[ID] = sess
 	go sess.timer()
@@ -137,6 +136,10 @@ func (sess *Session) timer() {
 	fmt.Println("Timer exiting for", id)
 }
 func (sess *Session) tick() {
+	data := marshal(sess.StatusPacket())
+	sess.sendOnAll(data) // not in new goroutine, should block.
+}
+func (sess *Session) StatusPacket() *packets.Packet {
 	sess.lock.Lock() // TODO do we need this lock or is just incomingLock sufficient
 	defer sess.lock.Unlock()
 	sess.incomingLock.Lock()
@@ -149,8 +152,7 @@ func (sess *Session) tick() {
 		i++
 	}
 	fmt.Println("Sending tick", timestamp, keys, sess.incomingSeq)
-	data := marshal(&packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}})
-	go sess.sendOnAll(data) //in new goroutine because locks
+	return &packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}}
 }
 func (sess *Session) removeConn(conn *Connection) {
 	sess.lock.Lock()
@@ -258,14 +260,14 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		}
 		//seq is a gap in what they have received
 		//this means one connection is going faster than another
-		sent, ok := sess.outgoing[seq]
-		if !ok || sent == nil {
+		outPacket, ok := sess.outgoing[seq]
+		if !ok || outPacket == nil {
 			fmt.Println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n", seq, "\n\n\n\n\n\n\n\n\n\n\n\nWe already deleted from our outgoing, but now they want it again? I don't think so\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
 			break
 		}
-		diff := time.Now().UnixNano() - sent.date
+		diff := time.Now().UnixNano() - outPacket.date
 		stillActive := false
-		for _, conn := range sent.sentOn {
+		for _, conn := range outPacket.sentOn {
 			if active(conn, sess) {
 				stillActive = true
 			}
@@ -273,8 +275,8 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		//stillActive = false means it almost certainly isn't still in transit; the connection is just closed
 		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq, stillActive, "\n\n\n\n\n")
 		if !stillActive {
-			sent.date = time.Now().UnixNano() // wait a bit before doing this again
-			sess.sendOnAll(*sent.data)
+			outPacket.date = time.Now().UnixNano() // wait a bit before doing this again
+			sess.sendOnAll(*outPacket.data)
 		}
 
 	}
