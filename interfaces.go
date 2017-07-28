@@ -7,6 +7,7 @@ import (
 
 	"crypto/sha256"
 	"encoding/binary"
+
 	"github.com/howardstark/fusion/protos"
 )
 
