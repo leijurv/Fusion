@@ -96,7 +96,7 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 			"sess":     packet.GetConfirm().GetSession(),
 			"id":       id,
 			"iface":    packet.GetConfirm().GetInterface(),
-			"iface id": inter,
+			"iface-id": inter,
 		}).Error(err)
 		return err
 	}
@@ -120,7 +120,7 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 func ClientReceivedSSHConnection(ssh net.Conn) SessionID {
 	sess := newSession()
 	log.WithFields(log.Fields{
-		"ssh conn": ssh,
+		"ssh-conn": ssh,
 		"id":       sess.sessionID,
 	}).Info("Client received new ssh conn")
 	sess.sshConn = &ssh
