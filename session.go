@@ -136,6 +136,10 @@ func (sess *Session) timer() {
 	fmt.Println("Timer exiting for", id)
 }
 func (sess *Session) tick() {
+	data := marshal(sess.StatusPacket())
+	sess.sendOnAll(data) //in new goroutine because locks
+}
+func (sess *Session) StatusPacket() *packets.Packet {
 	sess.lock.Lock() // TODO do we need this lock or is just incomingLock sufficient
 	defer sess.lock.Unlock()
 	sess.incomingLock.Lock()
@@ -148,8 +152,7 @@ func (sess *Session) tick() {
 		i++
 	}
 	fmt.Println("Sending tick", timestamp, keys, sess.incomingSeq)
-	data := marshal(&packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}})
-	go sess.sendOnAll(data) //in new goroutine because locks
+	return &packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}}
 }
 func (sess *Session) removeConn(conn Connection) {
 	sess.lock.Lock()
