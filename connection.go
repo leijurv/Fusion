@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type Connection struct {
@@ -72,6 +73,7 @@ func (conn *Connection) start() {
 func (conn *Connection) writeloop() {
 	for {
 		data := <-conn.outChan
+		conn.conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
 		a, err := conn.conn.Write(data)
 		if err == nil && a != len(data) {
 			panic("what the christ " + string(a) + " " + string(len(data)))
