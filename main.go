@@ -4,17 +4,29 @@ import (
 	"flag"
 	"net"
 
+	"fmt"
+	"strconv"
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 )
 
-type stringArrayVar []string
-
-func (s *stringArrayVar) String() string {
-	return "we probably don't need this?"
+type stringMapVar struct {
+	contents map[string]int
 }
 
-func (s *stringArrayVar) Set(value string) error {
-	*s = append(*s, value)
+func (s stringMapVar) String() string {
+	return fmt.Sprint(s.contents)
+}
+
+func (s stringMapVar) Set(value string) error {
+	iface := strings.Split(value, ",")
+	bandwidth, err := strconv.Atoi(iface[1])
+	if err != nil {
+		log.WithError(err).Fatal("Could not parse iface arguments! Uh-oh!")
+		panic(err)
+	}
+	s.contents[iface[0]] = bandwidth
 	return nil
 }
 
@@ -25,25 +37,33 @@ var flagRedundant bool
 var flagRedundantDownload bool
 var flagRedundantUpload bool
 var (
-	flagUDPInterfaces = new(stringArrayVar)
+	flagInterfaces = stringMapVar{
+		contents: make(map[string]int),
+	}
 )
 
 func init() {
+	log.SetFormatter(&log.TextFormatter{})
+	log.SetLevel(log.DebugLevel)
+
 	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? (Improves reliability)")
 	flag.BoolVar(&flagRedundantDownload, "rd", false, "Redundant mode only for downloads")
 	flag.BoolVar(&flagRedundantUpload, "ru", false, "Redundant mode only for uploads")
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
 	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
+	flag.Var(flagInterfaces, "iface", "Specifies which interfaces will be used for connections, as well as the bandwidth for each interface.\n"+
+		"Bandwidth is in KB/s. For unrestricted bandwidth, specify 0.\n"+
+		"Usage: fusion -iface=<interface name>,<bandwidth>"+
+		"Example: fusion -iface=en0,50")
 	//flag.Var(flagUDPInterfaces, "udp-interface", "The name of the interface you wish to use as UDP instead of TCP (This is not recommended for a single interface, as retrying on UDP will not be attempted")
 	//flag.Var(flagUDPInterfaces, "ui", "Shorthand for the 'udp-interface' parameter. See 'udp-interface' for usage")
 	//flag.Memes
-	log.SetFormatter(&log.TextFormatter{})
-	log.SetLevel(log.DebugLevel)
 }
 
 func main() {
 	flag.Parse()
+	log.Debug(flagInterfaces)
 	if flagListenMode {
 		if flagRedundant || flagRedundantUpload || flagRedundantDownload {
 			log.WithFields(log.Fields{

@@ -2,27 +2,22 @@ syntax = "proto3";
 package packets;
 
 message Packet {
-  oneof body {
-  	Init init = 1;
-    Data data = 2;
-    Status status = 3;
-    Control control = 4;
-    Confirm confirm = 5;
+    oneof body {
+  	    Init init = 1;
+        Data data = 2;
+        Status status = 3;
+        Control control = 4;
+        Confirm confirm = 5;
   }
 }
 
-message UDPData {
-	Data data = 1;
-	Confirm sessionInterface = 2;
-}
-
 message Data {
-  uint32 sequenceID = 1;
-  bytes content = 2;
+    uint32 sequenceID = 1;
+    bytes content = 2;
 }
 
 message Status {
-	int64 timestamp = 1;
+    int64 timestamp = 1;
 	uint32 incomingSeq = 2;
 	repeated uint32 inflight = 3;
 }
@@ -35,7 +30,8 @@ message Control {
 message Init {
 	Control control = 1;
 	uint64 interface = 2;
-    uint64 session = 3;
+    uint32 bandwidth = 3;
+    uint64 session = 4;
 }
 
 message Confirm {

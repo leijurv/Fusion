@@ -40,6 +40,12 @@ func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 		//}
 		session := getSession(sessionID)
 		for _, iface := range ifaces {
+			if len(flagInterfaces.contents) > 0 {
+				_, ok := flagInterfaces.contents[iface.Name]
+				if !ok {
+					break
+				}
+			}
 			connErr := startConnectionFromIface(session, iface, tcpServerAddr)
 			if connErr != nil {
 				return connErr

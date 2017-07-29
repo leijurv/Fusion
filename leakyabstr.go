@@ -19,8 +19,8 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	}
 	_, ok := packet.GetBody().(*packets.Packet_Init)
 	if !ok {
-		log.Error("Expected control packet, instead received: ", packet.GetBody())
-		return errors.New("Expected control packet")
+		log.Error("Expected init packet, instead received: ", packet.GetBody())
+		return errors.New("Expected init packet")
 	}
 	id := SessionID(packet.GetInit().GetSession())
 	inter := packet.GetInit().GetInterface()
@@ -71,6 +71,7 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 			Init: &packets.Init{
 				Session:   uint64(id),
 				Interface: inter,
+				Bandwidth: uint32(flagInterfaces.contents[conn.iface]),
 				Control: &packets.Control{
 					Timestamp: time.Now().UnixNano(),
 					Redundant: flagRedundant || flagRedundantDownload,
