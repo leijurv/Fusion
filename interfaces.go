@@ -74,9 +74,9 @@ func startConnectionFromIface(session *Session, iface net.Interface, tcpServerAd
 		"sess-id": session.sessionID,
 	}).WithError(connErr).Error("Could not create conn...")
 
-	data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant}}})
-	getSession(session.sessionID).redundant = flagRedundant
-	go getSession(session.sessionID).sendOnAll(data)
+	data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant || flagRedundantDownload}}})
+	session.redundant = flagRedundant || flagRedundantUpload
+	go session.sendOnAll(data)
 	return nil
 }
 
@@ -109,6 +109,10 @@ func buildConnectionFromAddrs(addrs []net.Addr, tcpServerAddr *net.TCPAddr, ifac
 		}
 		interimID := sha256.Sum256([]byte(iface.Name))
 		ifaceID := binary.BigEndian.Uint64(interimID[:8])
+		if iface.Name == "" {
+			log.Error("Empty interface name")
+			continue
+		}
 		return &Connection{
 			iface:   iface.Name,
 			ifaceID: ifaceID,

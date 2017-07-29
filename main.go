@@ -2,8 +2,9 @@ package main
 
 import (
 	"flag"
-	log "github.com/sirupsen/logrus"
 	"net"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type stringArrayVar []string

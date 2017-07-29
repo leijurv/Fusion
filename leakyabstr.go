@@ -24,6 +24,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	}
 	id := SessionID(packet.GetInit().GetSession())
 	inter := packet.GetInit().GetInterface()
+	tcp.ifaceID = inter
 	log.WithFields(log.Fields{
 		"conn":  conn,
 		"id":    id,
@@ -44,7 +45,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	}
 
 	sess := getSession(SessionID(id))
-	sess.redundant = packet.GetInit().GetControl().GetRedundant()
+	sess.onReceiveControl(packet.GetInit().GetControl())
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {

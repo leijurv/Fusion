@@ -2,11 +2,12 @@ package main
 
 import (
 	"errors"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Connection struct {
@@ -119,5 +120,8 @@ func (conn *Connection) GetInterfaceID() uint64 {
 }
 
 func (conn *Connection) GetInterfaceName() string {
+	if conn.iface == "" {
+		panic("we're server side why are you asking for the interface name i dont even know it lmao")
+	}
 	return conn.iface
 }

@@ -1,9 +1,10 @@
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
 	mrand "math/rand"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func randomize(buf []byte, sess *Session) {
