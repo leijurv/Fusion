@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"sync"
@@ -59,7 +59,7 @@ func (conn *Connection) Write(data []byte) error {
 	}
 	if !ok {
 		conn.outChan <- data // blocking write
-		fmt.Println("Wrote with blocking =(")
+		log.Debug("Had to fallback to blocking write")
 	}
 	return nil
 }
@@ -86,7 +86,7 @@ func (conn *Connection) writeloop() {
 				close(conn.outChan)
 			}
 			conn.running = false
-			fmt.Println("closing", conn.conn, "because", err)
+			log.WithField("conn", conn.conn).WithError(err).Error("Closing connection in write loop")
 			go conn.Close()
 			return
 		}

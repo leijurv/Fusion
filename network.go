@@ -2,11 +2,11 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	mrand "math/rand"
 	"time"
 
 	"github.com/howardstark/fusion/protos"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 
 func (sess *Session) sendPacket(out *OutgoingPacket) {
 	if sess.redundant {
-		fmt.Println("SENDING REDUNDANT")
+		log.Debug("Will send redundantly")
 		sess.sendOnAll(*out.data)
 		out.date = time.Now().UnixNano()
 		return
@@ -57,7 +57,7 @@ func (sess *Session) sendPacket(out *OutgoingPacket) {
 			//if there are no connections, it can just not send
 			//it's still in outgoing
 			//so when a conn is reestablished it'll be sent
-			fmt.Println("OH NO UH IDK WHAT TO DO")
+			log.Warning("No open connections. Will send when conn is reestablished.")
 			return
 		}
 		avail = sess.conns // if we've already tried them all, try them all again!
@@ -76,21 +76,25 @@ func (sess *Session) sendPacket(out *OutgoingPacket) {
 		}
 	}
 	if !wrote {
-		fmt.Println("Failed, picking at random")
+		log.Debug("Failed to write. Picking new interface at random.")
 	}
-	fmt.Println("Selected", wrote, "conn", connSelection.conn.LocalAddr(), connSelection.conn.RemoteAddr())
+	log.WithFields(log.Fields{
+		"conn":  connSelection.conn,
+		"iface": connSelection.iface,
+		"addr":  connSelection.conn.RemoteAddr(),
+	}).Debug("Selected new connection")
 	out.sentOn = append(out.sentOn, connSelection) // TODO lock
 	out.date = time.Now().UnixNano()
 	sess.lock.Unlock() // no blocking io in lock
 
 	if !wrote {
-		fmt.Println("No connections were non blocking, falling back to random blocking")
+		log.Debug("No connections were non-blocking. Falling back to random blocking.")
 		connSelection.Write(*out.data) // haha yes
 		// do actual write outside of lock
 	}
 }
 func (sess *Session) sendOnAll(serialized []byte) {
-	fmt.Println("Sending out packet to", len(sess.conns), "destinations")
+	log.Debug("Sending out packet to ", len(sess.conns), " destinations")
 	sess.lock.Lock() // lock is ok because we are starting goroutines to do the blocking io
 	count := len(sess.conns)
 	if count == 1 {
@@ -116,7 +120,7 @@ func (sess *Session) sendOnAll(serialized []byte) {
 			break
 		}
 		if ind == count {
-			fmt.Println("OH NO THEY ALL FAILED")
+			log.Warning("Writing on all interfaces failed")
 			break
 		}
 	}
@@ -129,31 +133,34 @@ func (sess *Session) sendOnAll(serialized []byte) {
 }
 
 func (sess *Session) listenSSH() error {
+	contextLog := log.WithFields(log.Fields{
+		"sess-id": sess.sessionID,
+	})
 	defer sess.kill() // guarantee
 	for {
 		if uint64(sess.sessionID) == 0 {
-			fmt.Println("listenssh dying because session killed")
+			contextLog.Warning("ListenSSH dying because session was killed.")
 			return nil
 		}
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
-			fmt.Println("SSH read err, killing session", sess.sessionID, err)
+			contextLog.WithError(err).Error("SSH read err. Killing session.")
 			go sess.kill()
 			return err
 		}
 		buf = buf[:n]
 		if len(sess.conns) == 0 {
-			fmt.Println("listenssh waiting for connections...  ", sess.sessionID)
+			contextLog.Debug("ListenSSH waiting for connections...")
 		} //TODO is it ok to do len(sess.conns) without lock? i think it's fine but not certain... we aren't iterating, reading, or modifying so probably
 		for len(sess.conns) == 0 { // no point in reading from ssh if the data has nowhere to go
 			time.Sleep(10 * time.Millisecond) // block until nonempty
 			if uint64(sess.sessionID) == 0 {
-				fmt.Println("listenssh dying because session killed (waiting subloop)")
+				contextLog.Debug("ListenSSH dying with read data because session was killed.")
 				return nil
 			}
 		}
-		fmt.Println("Read", n, "bytes from ssh")
+		contextLog.Debug("Read ", n, "bytes from ssh")
 		if RAND_REORDER {
 			randomize(buf, sess)
 		} else {
@@ -173,31 +180,31 @@ func (sess *Session) addConnAndListen(conn *Connection) {
 	go func() {
 		defer sess.removeConn(conn)
 		err := connListen(sess, conn)
-		fmt.Println("conn listen err", err)
+		log.WithError(err).Error("Conn listen err")
 	}()
 }
 
 func (sess *Session) writeSSH(data []byte) {
-	fmt.Println("Sending", len(data), "bytes to ssh")
+	log.Debug("Sending ", len(data), "bytes to ssh")
 	n, err := (*sess.sshConn).Write(data)
 	if n != len(data) && err == nil {
-		panic("whatt")
+		panic("whatt") // TODO: Whatt
 	}
 	if err != nil {
-		fmt.Println("SSH write err", err, "killing session", sess.sessionID)
+		log.WithField("sess-id", sess.sessionID).WithError(err).Error("SSH write err. Killing session.")
 		go sess.kill()
 	}
 }
 
 func connListen(sess *Session, conn *Connection) error {
-	fmt.Println("Beginning conn listen")
+	log.Info("Beginning to listen to connection")
 	for {
 		//fmt.Println("Waiting for packet...")
 		conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		packet, packetErr, rawPacket := readProtoPacket(conn)
 		//fmt.Println("Got packet...")
 		if packetErr != nil {
-			fmt.Println("Read err", packetErr)
+			log.WithError(packetErr).Error("Could not read packet")
 			return packetErr
 		}
 
@@ -211,13 +218,12 @@ func connListen(sess *Session, conn *Connection) error {
 			go sess.onReceiveStatus(packet.GetStatus())
 		case *packets.Packet_Control:
 			go sess.onReceiveControl(packet.GetControl())
-		case *packets.Packet_Init:
-			err := errors.New("Init packet after init")
-			fmt.Println(err, packet, packet.GetBody())
-			return err
 		default:
 			err := errors.New("Unknown packet type?")
-			fmt.Println(err, packet, packet.GetBody())
+			log.WithFields(log.Fields{
+				"packet": packet,
+				"body":   packet.GetBody(),
+			}).WithError(err).Error("Unknown packet type")
 			return err
 		}
 	}

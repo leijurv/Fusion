@@ -3,13 +3,13 @@ package main
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/howardstark/fusion/protos"
+	log "github.com/sirupsen/logrus"
 )
 
 type SessionID uint64
@@ -82,7 +82,7 @@ func newSession() *Session {
 	_, ok := sessions[ID]
 	if ok {
 		//omfg collision??
-		fmt.Println("Session id collision detected at id: ", ID)
+		log.WithField("sess-id", ID).Warning("Session id collision detected")
 		return newSession() //recursion solves everything
 	}
 	sess := &Session{
@@ -122,23 +122,31 @@ func (sess *Session) timer() {
 	for uint64(sess.sessionID) != 0 {
 		time.Sleep(1 * time.Second)
 		sess.tick()
-		fmt.Println("Ticking with", len(sess.conns), "conns and tick count", ticksWithoutConns)
+		log.WithFields(log.Fields{
+			"active-conns": len(sess.conns),
+			"tick-count":   ticksWithoutConns,
+		}).Debug("Ticking")
 		if len(sess.conns) == 0 {
 			ticksWithoutConns++
 		} else {
 			ticksWithoutConns = 0
 		}
 		if ticksWithoutConns > 60 {
-			fmt.Println("Killing session", sess.sessionID, "because", ticksWithoutConns, "ticks without any connections")
+			log.WithFields(log.Fields{
+				"sess-id":    sess.sessionID,
+				"tick-count": ticksWithoutConns,
+			}).Info("Killing session. No conns.")
 			sess.kill()
 		}
 	}
-	fmt.Println("Timer exiting for", id)
+	log.WithField("sess-id", id).Debug("Timer exiting")
 }
+
 func (sess *Session) tick() {
 	data := marshal(sess.StatusPacket())
 	sess.sendOnAll(data) // not in new goroutine, should block.
 }
+
 func (sess *Session) StatusPacket() *packets.Packet {
 	sess.lock.Lock() // TODO do we need this lock or is just incomingLock sufficient
 	defer sess.lock.Unlock()
@@ -151,22 +159,29 @@ func (sess *Session) StatusPacket() *packets.Packet {
 		keys[i] = k
 		i++
 	}
-	fmt.Println("Sending tick", timestamp, keys, sess.incomingSeq)
+	log.WithFields(log.Fields{
+		"timestamp": timestamp,
+		"keys":      keys,
+		"inc-seq":   sess.incomingSeq,
+	}).Debug("Sending tick")
+
 	return &packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}}
 }
+
 func (sess *Session) removeConn(conn *Connection) {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	for i := 0; i < len(sess.conns); i++ {
 		if sess.conns[i] == conn {
 			sess.conns = append(sess.conns[:i], sess.conns[i+1:]...)
-			fmt.Println("Sucesssfully removed connection index", i)
+			log.Debug("Successfully removed connection index ", i)
 			return
 		}
 	}
-	fmt.Println(conn, "not present in", sess.conns)
+	log.Debug(conn, " not present in ", sess.conns)
 	panic("conn could not be removed")
 }
+
 func (sess *Session) checkInflight() { // *sheds tear* it's... beautiful
 	for {
 		data, ok := sess.inflight[sess.incomingSeq]
@@ -178,6 +193,7 @@ func (sess *Session) checkInflight() { // *sheds tear* it's... beautiful
 		sess.incomingSeq++
 	}
 }
+
 func (sess *Session) onReceiveData(from *Connection, packet *packets.Data) {
 	sequenceID := packet.GetSequenceID()
 	data := packet.GetContent()
@@ -187,20 +203,29 @@ func (sess *Session) onReceiveData(from *Connection, packet *packets.Data) {
 		sess.highestReceivedSeq = sequenceID
 	}
 	if sess.incomingSeq == sequenceID {
-		fmt.Println("Ordered seq matches good, now waiting on", sess.incomingSeq+1)
+		log.WithField("futureSeq", sess.incomingSeq+1).Debug("Sequence is in order. Waiting for next in sequence.")
 		sess.writeSSH(data)
 		sess.incomingSeq++
 		sess.checkInflight()
 		return
 	}
 	if sess.incomingSeq > sequenceID {
-		fmt.Println("Dupe somehow? expecting", sess.incomingSeq, "got", sequenceID, "from", from.LocalAddr())
+		log.WithFields(log.Fields{
+			"expecting": sess.incomingSeq,
+			"received":  sequenceID,
+			"from":      from.LocalAddr(),
+		}).Debug("Received dupe.")
 		return
 	}
-	fmt.Println("Out of order, expecting", sess.incomingSeq, "got", sequenceID, "from", from.LocalAddr())
+	log.WithFields(log.Fields{
+		"expecting": sess.incomingSeq,
+		"received":  sequenceID,
+		"from":      from.LocalAddr(),
+	}).Debug("Out of order.")
 	sess.inflight[sequenceID] = &data
 	sess.checkInflight()
 }
+
 func active(conn *Connection, sess *Session) bool {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
@@ -211,14 +236,20 @@ func active(conn *Connection, sess *Session) bool {
 	}
 	return false
 }
+
 func (sess *Session) onReceiveControl(packet *packets.Control) {
 	sess.redundant = packet.GetRedundant()
 }
+
 func (sess *Session) onReceiveStatus(packet *packets.Status) {
 	incomingSeq := packet.GetIncomingSeq()
 	timestamp := packet.GetTimestamp()
 	inflight := packet.GetInflight()
-	fmt.Println("Received status", incomingSeq, timestamp, inflight)
+	log.WithFields(log.Fields{
+		"incomingSeq": incomingSeq,
+		"timestamp":   timestamp,
+		"inflight":    inflight,
+	}).Debug("Received status")
 	maxReceived := uint32(0)
 	inflightMap := make(map[uint32]bool)
 	for i := 0; i < len(inflight); i++ {
@@ -235,7 +266,7 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		keys[index] = k
 		index++
 	}
-	fmt.Println("Current outgoing keys:", keys)
+	log.WithField("keys", keys).Debug("Current outgoing keys: ")
 	//only do a prune once we receive a status because that's the only time we get new info that lets us prune
 	for i := 0; i < len(keys); i++ {
 		if keys[i] < incomingSeq {
@@ -248,7 +279,7 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 	for j := 0; j < len(inflight); j++ { //also remove everything in inflight from sess.outgoing, because that's what they have received but not processed
 		_, ok := sess.outgoing[inflight[j]]
 		if ok {
-			fmt.Println("Inflight prune", inflight[j])
+			log.Debug("Inflight prune ", inflight[j])
 			delete(sess.outgoing, inflight[j])
 		}
 	}
@@ -262,7 +293,9 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		//this means one connection is going faster than another
 		outPacket, ok := sess.outgoing[seq]
 		if !ok || outPacket == nil {
-			fmt.Println("\n\n\n\n\n\n\n\n\n\n\n\n\n\n", seq, "\n\n\n\n\n\n\n\n\n\n\n\nWe already deleted from our outgoing, but now they want it again? I don't think so\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
+			log.WithFields(log.Fields{
+				"seq": seq,
+			}).Warning("Attempting to fetch already-pruned packet")
 			break
 		}
 		diff := time.Now().UnixNano() - outPacket.date
@@ -273,7 +306,11 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 			}
 		}
 		//stillActive = false means it almost certainly isn't still in transit; the connection is just closed
-		fmt.Println("\n\n\n\n\nTime diff ms", diff/1000000, "for", seq, stillActive, "\n\n\n\n\n")
+		log.WithFields(log.Fields{
+			"time-diff": diff / 1000000,
+			"seq":       seq,
+			"active":    stillActive,
+		}).Debug("Time diff (ms)")
 		if !stillActive {
 			outPacket.date = time.Now().UnixNano() // wait a bit before doing this again
 			sess.sendOnAll(*outPacket.data)

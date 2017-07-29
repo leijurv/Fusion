@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"time"
 
@@ -9,26 +8,27 @@ import (
 	"encoding/binary"
 
 	"github.com/howardstark/fusion/protos"
+	log "github.com/sirupsen/logrus"
 )
 
 func SetupInterfaces(sessionID SessionID, serverAddr string) error {
 	defer func() {
-		fmt.Println("setupinterfaces killing", sessionID, "because scan failed")
+		log.WithField("sess-id", sessionID).Warning("Killing SetupInterfaces because scan failed")
 		getSession(sessionID).kill() // when the scan is over, the session is over
 	}()
 	for {
 		if !hasSession(sessionID) {
-			fmt.Println("STOPPING SCAN")
+			log.WithField("sess-id", sessionID).Debug("Stopping scan because session does not exist")
 			return nil
 		}
 		ifaces, ifaceErr := net.Interfaces()
 		if ifaceErr != nil {
-			fmt.Println("Stopping scan because iface err", ifaceErr)
+			log.WithError(ifaceErr).Error("Stopping scan because iface err")
 			return ifaceErr
 		}
 		tcpServerAddr, tcpServerErr := net.ResolveTCPAddr("tcp", serverAddr)
 		if tcpServerErr != nil {
-			fmt.Println("Stopping scan because server err", tcpServerErr)
+			log.WithError(tcpServerErr).Error("Stopping scan because server err")
 			return tcpServerErr
 		}
 		////var udpServerAddr *net.UDPAddr
@@ -61,14 +61,19 @@ func startConnectionFromIface(session *Session, iface net.Interface, tcpServerAd
 	session.lock.Unlock()
 	addrs, addrErr := iface.Addrs()
 	if addrErr != nil {
-		fmt.Println("Stopping scan because addr err", addrErr)
+		log.WithError(addrErr).Error("Stopping scan because addr err")
 		return addrErr
 	}
 	connection := buildConnectionFromAddrs(addrs, tcpServerAddr, iface)
 	if connection == nil {
 		return nil
 	}
-	fmt.Println(ClientCreateServerConnection(connection, session.sessionID))
+	connErr := ClientCreateServerConnection(connection, session.sessionID)
+	log.WithFields(log.Fields{
+		"conn":    connection,
+		"sess-id": session.sessionID,
+	}).WithError(connErr).Error("Could not create conn...")
+
 	data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant}}})
 	getSession(session.sessionID).redundant = flagRedundant
 	go getSession(session.sessionID).sendOnAll(data)
@@ -77,24 +82,29 @@ func startConnectionFromIface(session *Session, iface net.Interface, tcpServerAd
 
 func buildConnectionFromAddrs(addrs []net.Addr, tcpServerAddr *net.TCPAddr, iface net.Interface) *Connection {
 	for _, addr := range addrs {
-		fmt.Println("ATTEMPTING", iface, addr)
+		log.WithFields(log.Fields{
+			"iface": iface.Name,
+			"addr":  addr,
+		}).Debug("Attempting connection")
 		ip, _, ipErr := net.ParseCIDR(addr.String())
 		if ipErr != nil {
-			fmt.Println(ipErr)
+			log.WithError(ipErr).Error("Could not parse CIDR")
 			continue
 		}
-		tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
 		if ip.IsLinkLocalMulticast() {
 			continue
 		}
+		tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
 		if localErr != nil {
-			fmt.Println(localErr)
+			log.WithFields(log.Fields{
+				"addr": ip.String(),
+			}).WithError(localErr).Error("Could not resolve tcp address")
 			continue
 		}
-		fmt.Println("DIALING DIALING DIALING tcpLocalAddr: ", tcpLocalAddr)
+		log.WithField("local-addr", tcpLocalAddr).Debug("Dialing TCP conn...")
 		conn, err := net.DialTCP("tcp", tcpLocalAddr, tcpServerAddr)
 		if err != nil {
-			fmt.Println(err)
+			log.Error("TCP Dial error", err)
 			continue
 		}
 		interimID := sha256.Sum256([]byte(iface.Name))

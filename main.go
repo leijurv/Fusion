@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	log "github.com/sirupsen/logrus"
 	"net"
 )
 
@@ -34,20 +34,23 @@ func init() {
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
 	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
-	flag.Var(flagUDPInterfaces, "udp-interface", "The name of the interface you wish to use as UDP instead of TCP (This is not recommended for a single interface, as retrying on UDP will not be attempted")
-	flag.Var(flagUDPInterfaces, "ui", "Shorthand for the 'udp-interface' parameter. See 'udp-interface' for usage")
+	//flag.Var(flagUDPInterfaces, "udp-interface", "The name of the interface you wish to use as UDP instead of TCP (This is not recommended for a single interface, as retrying on UDP will not be attempted")
+	//flag.Var(flagUDPInterfaces, "ui", "Shorthand for the 'udp-interface' parameter. See 'udp-interface' for usage")
 	//flag.Memes
+	log.SetFormatter(&log.TextFormatter{})
 }
 
 func main() {
 	flag.Parse()
 	if flagListenMode {
 		if flagRedundant || flagRedundantUpload || flagRedundantDownload {
-			fmt.Println("In listen mode, the redundant flags have no effect. The client that makes the connection decides it.")
+			log.WithFields(log.Fields{
+				"redundant":      flagRedundant,
+				"redundant-up":   flagRedundantUpload,
+				"redundant-down": flagRedundantDownload,
+			}).Warning("While in listen mode, the redundant flags will have no effect.")
 			return
 		}
-	}
-	if flagListenMode {
 		err := Server()
 		if err != nil {
 			panic(err)
@@ -61,7 +64,14 @@ func main() {
 }
 
 func Client(serverAddr string) error {
-	fmt.Println("Starting client...")
+	log.WithFields(log.Fields{
+		"rud":    flagRedundant,
+		"rud-up": flagRedundantUpload,
+		"rud-dl": flagRedundantDownload,
+		"listen": flagListenMode,
+		"addr":   flagAddress,
+		"poll":   flagIfacePoll,
+	}).Info("Starting client...")
 	ln, err := net.Listen("tcp", ":5021")
 	if err != nil {
 		return err
@@ -75,14 +85,18 @@ func Client(serverAddr string) error {
 			sessionID := ClientReceivedSSHConnection(conn)
 			err := SetupInterfaces(sessionID, serverAddr)
 			if err != nil {
-				fmt.Println("SEARCHFORME Error with", conn, err)
+				log.Errorln(err)
 			}
 		}()
 	}
 }
 
 func Server() error {
-	fmt.Println("Starting server...")
+	log.WithFields(log.Fields{
+		"listen": flagListenMode,
+		"addr":   flagAddress,
+		"poll":   flagIfacePoll,
+	}).Info("Starting server...")
 	ln, err := net.Listen("tcp", ":5022")
 	if err != nil {
 		return err
@@ -95,7 +109,10 @@ func Server() error {
 		go func() {
 			err := ServerReceivedClientConnection(conn)
 			if err != nil {
-				fmt.Println("Error with", conn, err)
+				// TODO: Add in and then utilize per-connection logging contexts
+				log.WithFields(log.Fields{
+					"conn": conn,
+				}).Errorln(err)
 			}
 		}()
 	}
