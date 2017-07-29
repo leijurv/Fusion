@@ -38,6 +38,7 @@ func init() {
 	//flag.Var(flagUDPInterfaces, "ui", "Shorthand for the 'udp-interface' parameter. See 'udp-interface' for usage")
 	//flag.Memes
 	log.SetFormatter(&log.TextFormatter{})
+	log.SetLevel(log.DebugLevel)
 }
 
 func main() {
