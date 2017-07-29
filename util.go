@@ -1,22 +1,21 @@
 package main
 
 import (
-	"fmt"
+	log "github.com/sirupsen/logrus"
 	mrand "math/rand"
 	"time"
 )
 
 func randomize(buf []byte, sess *Session) {
 	if len(buf) < 10 {
-		fmt.Println(len(buf), "too small to split")
+		log.WithField("buf-len", len(buf)).Debug("Buffer too small to split")
 		sess.sendPacket(sess.wrap(buf))
 		return
 	}
 
 	parts := 5
 	partSize := len(buf) / parts
-
-	fmt.Println(len(buf), "gonna split")
+	log.WithField("buf-len", len(buf)).Debug("Splitting buffer")
 	packets := make([]*OutgoingPacket, parts+1)
 	totalSize := 0
 	for i := 0; i < parts; i++ {
@@ -28,7 +27,7 @@ func randomize(buf []byte, sess *Session) {
 	packets[parts] = sess.wrap(tmp)
 	totalSize += len(tmp)
 	if len(buf) != totalSize {
-		fmt.Println("Expected len ", len(buf), "got", totalSize, "packetslen", len(packets))
+		log.WithField("packets-len", len(packets)).Debug("Expected len ", len(buf), "got", totalSize)
 		panic("") // somehow the splitter and reorderer ended up with the wrong number of total bytes
 	}
 
