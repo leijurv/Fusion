@@ -3,13 +3,12 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/howardstark/fusion/protos"
+	log "github.com/sirupsen/logrus"
 )
 
 var packetDedupLock sync.Mutex
@@ -54,7 +53,7 @@ func (sess *Session) wrap(data []byte) *OutgoingPacket {
 			},
 		},
 	}
-	fmt.Println("Constructed")
+	log.Debug("Packet constructed")
 	marshalled := marshal(&packet)
 	sess.outgoingLock.Lock()
 	defer sess.outgoingLock.Unlock()
@@ -70,11 +69,11 @@ func (sess *Session) wrap(data []byte) *OutgoingPacket {
 func marshal(packet *packets.Packet) []byte {
 	packetData, packetErr := proto.Marshal(packet)
 	if packetErr != nil {
-		fmt.Println("Marshal error", packetErr)
+		log.WithError(packetErr).Error("Marshal error")
 		return nil
 	}
 	if len(packetData) >= 65535 {
-		fmt.Println(errors.New("Packet was too big"))
+		log.Error("Packet too large")
 		return nil
 	}
 	packetLen := make([]byte, 2)
@@ -90,7 +89,7 @@ func readProtoPacket(conn *Connection) (packets.Packet, error, []byte) {
 		return packet, lenErr, nil
 	}
 	l := binary.BigEndian.Uint16(packetLen)
-	fmt.Println("Reading packet of length", l)
+	log.Debug("Reading packet of length ", l)
 	packetData := make([]byte, l)
 	dataErr := conn.ReadFull(packetData)
 	if dataErr != nil {
