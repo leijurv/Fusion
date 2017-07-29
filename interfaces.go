@@ -96,9 +96,7 @@ func buildConnectionFromAddrs(addrs []net.Addr, tcpServerAddr *net.TCPAddr, ifac
 		}
 		tcpLocalAddr, localErr := net.ResolveTCPAddr("tcp", ip.String()+":0")
 		if localErr != nil {
-			log.WithFields(log.Fields{
-				"addr": ip.String(),
-			}).WithError(localErr).Error("Could not resolve tcp address")
+			log.WithError(localErr).Warning("Could not resolve tcp address")
 			continue
 		}
 		log.WithField("local-addr", tcpLocalAddr).Debug("Dialing TCP conn...")
