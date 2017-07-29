@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 
-	"github.com/howardstark/fusion/protos"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -64,23 +63,15 @@ func startConnectionFromIface(session *Session, iface net.Interface, tcpServerAd
 		log.WithError(addrErr).Error("Stopping scan because addr err")
 		return addrErr
 	}
-	connection := buildConnectionFromAddrs(addrs, tcpServerAddr, iface)
+	connection := buildConnectionFromAddrs(addrs, tcpServerAddr, iface, session.sessionID)
 	if connection == nil {
 		return nil
 	}
-	connErr := ClientCreateServerConnection(connection, session.sessionID)
-	log.WithFields(log.Fields{
-		"conn":    connection,
-		"sess-id": session.sessionID,
-	}).WithError(connErr).Error("Could not create conn...")
 
-	data := marshal(&packets.Packet{Body: &packets.Packet_Control{Control: &packets.Control{Timestamp: time.Now().UnixNano(), Redundant: flagRedundant || flagRedundantDownload}}})
-	session.redundant = flagRedundant || flagRedundantUpload
-	go session.sendOnAll(data)
 	return nil
 }
 
-func buildConnectionFromAddrs(addrs []net.Addr, tcpServerAddr *net.TCPAddr, iface net.Interface) *Connection {
+func buildConnectionFromAddrs(addrs []net.Addr, tcpServerAddr *net.TCPAddr, iface net.Interface, id SessionID) *Connection {
 	for _, addr := range addrs {
 		log.WithFields(log.Fields{
 			"iface": iface.Name,
@@ -105,17 +96,26 @@ func buildConnectionFromAddrs(addrs []net.Addr, tcpServerAddr *net.TCPAddr, ifac
 			log.Error("TCP Dial error", err)
 			continue
 		}
-		interimID := sha256.Sum256([]byte(iface.Name))
-		ifaceID := binary.BigEndian.Uint64(interimID[:8])
 		if iface.Name == "" {
 			log.Error("Empty interface name")
 			continue
 		}
-		return &Connection{
+		interimID := sha256.Sum256([]byte(iface.Name))
+		ifaceID := binary.BigEndian.Uint64(interimID[:8])
+		connection := &Connection{
 			iface:   iface.Name,
 			ifaceID: ifaceID,
 			conn:    conn,
 		}
+		connErr := ClientCreateServerConnection(connection, id)
+		if connErr != nil {
+			log.WithFields(log.Fields{
+				"conn":    connection,
+				"sess-id": id,
+			}).WithError(connErr).Error("Could not create conn...")
+			continue
+		}
+		return connection
 	}
 	return nil
 }
