@@ -65,12 +65,11 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 
 func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 	conn.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	inter := uint64(5021)
 	err := conn.Write(marshal(&packets.Packet{
 		Body: &packets.Packet_Init{
 			Init: &packets.Init{
 				Session:   uint64(id),
-				Interface: inter,
+				Interface: conn.ifaceID,
 				Bandwidth: uint32(flagInterfaces.contents[conn.iface]),
 				Control: &packets.Control{
 					Timestamp: time.Now().UnixNano(),
@@ -92,13 +91,13 @@ func ClientCreateServerConnection(conn *Connection, id SessionID) error {
 		log.Error("Expected confirm packet, instead received: ", packet.GetBody())
 		return errors.New("Expected confirm packet")
 	}
-	if packet.GetConfirm().GetSession() != uint64(id) || packet.GetConfirm().GetInterface() != inter {
-		err = errors.New("ID response mismatch " + string(packet.GetConfirm().GetSession()) + "  " + string(id) + " " + string(packet.GetConfirm().GetInterface()) + "  " + string(inter))
+	if packet.GetConfirm().GetSession() != uint64(id) || packet.GetConfirm().GetInterface() != conn.ifaceID {
+		err = errors.New("ID response mismatch")
 		log.WithFields(log.Fields{
 			"sess":     packet.GetConfirm().GetSession(),
 			"id":       id,
 			"iface":    packet.GetConfirm().GetInterface(),
-			"iface-id": inter,
+			"iface-id": conn.ifaceID,
 		}).Error(err)
 		return err
 	}
