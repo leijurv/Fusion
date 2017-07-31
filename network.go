@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	mrand "math/rand"
+	"sync"
 	"time"
 
 	"github.com/howardstark/fusion/protos"
@@ -11,20 +12,35 @@ import (
 
 const (
 	//BUF_SIZE is not determined by how fast or how often SSH sends out data, or how big. The connection to ssh is a localhost socket, which is fast as can be, and is not an issue.
-	//It also is not determined by TCP packet size. TCP packet max size is anywhere from 800 to 1400 to 1500 to 9000 to 65535. The OS is very very good and fast at splitting up writes into all the requisite TCP packets
-	//the real slow part is incoming and outgoing, and keeping track of all this data, all the goroutines and outgoing channels, etc. We want to have big chunks. At 10mbit, 64kb chunks result in ~20 per second. That's completely doable. Smaller chunks like the TCP max size on different networks would be really pushing it
+	//It also is not determined by TCP packet size. TCP packet max size is anywhere from 800 to 1400 to 1500 to 9000 to 65535. The OS is very very good and fast at splitting up writes into all the requisite TCP packets.
+	//the real slow part is incoming and outgoing, and keeping track of all this data, all the goroutines, outgoing channels, inflight maps, etc. We want to have big chunks. At 10mbit, 64kb chunks result in ~20 per second. That's completely doable. Smaller chunks like the TCP max size on different networks would be really pushing it.
 	BUF_SIZE = 65535 - 11 - 1 // encoding with protobuf into the Packet_Data results in 11 bytes added. when BUF_SIZE is 65536, we get packets up to 65547 in length.
 	//by limiting the post-wrapping length to less than 65535, we can encode the protobuf packet length into 2 bytes instead of 4.
 
 	RAND_REORDER = false // TODO cli option
 )
 
+type OutgoingPacket struct {
+	seq     uint32
+	data    *[]byte
+	sentOn  []*Connection
+	date    int64
+	session *Session
+	lock    sync.Mutex
+}
+
 func (sess *Session) sendPacket(out *OutgoingPacket) {
 	if sess.redundant {
-		log.Debug("Will send redundantly")
-		sess.sendOnAll(*out.data)
-		out.date = time.Now().UnixNano()
+		sess.sendPacketCustom(out, true) // if we are sending redundant, send to everywhere I can non-blockingly
 		return
+	}
+	sess.sendPacketCustom(out, false) // by default, only send to one non-blocking
+}
+
+func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking bool) {
+	if sess.redundant && !multipleNonBlocking { // TODO i mean is it this function's job to catch this? just warn
+		log.Error("Possible bug or race condition =DDDD")
+		multipleNonBlocking = true
 	}
 	sess.lock.Lock()
 	if len(sess.conns) == 1 {
@@ -35,65 +51,83 @@ func (sess *Session) sendPacket(out *OutgoingPacket) {
 		c.Write(*out.data)
 		return
 	}
-	//TODO add optimizations like:
-	//if sentOn is empty, just pick a connection at random
-	//if there is 1 connection, don't use the random number generator, just go ahead and send it
-	avail := make([]*Connection, 0)
+	var avail []*Connection
+	if len(out.sentOn) == 0 {
+		avail = make([]*Connection, 0, len(sess.conns)) //don't do "len(sess.conns)-len(out.sentOn)" because that could become negative (dupes in sentOn, connections dropping out, etc)
 
-	alreadyUsedMap := make(map[*Connection]bool)
-	for i := 0; i < len(out.sentOn); i++ {
-		alreadyUsedMap[out.sentOn[i]] = true
-	}
-
-	for i := 0; i < len(sess.conns); i++ {
-		_, ok := alreadyUsedMap[sess.conns[i]]
-		if !ok {
-			avail = append(avail, sess.conns[i])
+		alreadyUsedMap := make(map[*Connection]bool)
+		for i := 0; i < len(out.sentOn); i++ {
+			alreadyUsedMap[out.sentOn[i]] = true
+		}
+		for i := 0; i < len(sess.conns); i++ {
+			_, ok := alreadyUsedMap[sess.conns[i]]
+			if !ok {
+				avail = append(avail, sess.conns[i])
+			}
+		}
+		if len(avail) == 0 {
+			avail = sess.conns // if we've already tried them all, try them all again!
 		}
 	}
 	if len(avail) == 0 {
-		if len(sess.conns) == 0 {
-			//this doesn't need to return an error
-			//if there are no connections, it can just not send
-			//it's still in outgoing
-			//so when a conn is reestablished it'll be sent
-			log.Warning("No open connections. Will send when conn is reestablished.")
-			return
-		}
-		avail = sess.conns // if we've already tried them all, try them all again!
+		//this doesn't need to return an error
+		//if there are no connections, it can just not send
+		//it's still in outgoing
+		//so when a conn is reestablished it'll be sent
+		log.Warning("No open connections. Will send when conn is reestablished.")
+		return
 	}
-	rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano()))
-	perm := rSrc.Perm(len(avail))
-	wrote := false
-	connSelection := avail[rSrc.Intn(len(avail))]
-	for i := 0; i < len(avail); i++ {
-		c := avail[perm[i]]
-		ok, _ := c.WriteNonBlocking(*out.data)
-		if ok {
-			wrote = true
-			connSelection = c
-			break
+	var connSelection *Connection
+	writeBlocking := false
+	if len(avail) == 1 {
+		connSelection = avail[0]
+		//if there is only one connection, just write blocking to it. no point in trying non-blocking, then falling back to blocking if this is the only option.
+		writeBlocking = true
+	} else {
+		rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+		perm := rSrc.Perm(len(avail))
+		wrote := false
+		connSelection = avail[rSrc.Intn(len(avail))]
+		for i := 0; i < len(avail); i++ {
+			c := avail[perm[i]]
+			ok, _ := c.WriteNonBlocking(*out.data)
+			if ok {
+				if wrote { // we already did one write, dont just pretend like it didn't happen, broadcast it to the world =DDDDDDDDDD
+					log.WithFields(log.Fields{
+						"conn":  connSelection.conn,
+						"iface": connSelection.iface,
+						"addr":  connSelection.conn.RemoteAddr(),
+					}).Debug("Write to connection")
+				}
+				wrote = true
+				connSelection = c
+				if !multipleNonBlocking {
+					break
+				}
+			}
 		}
-	}
-	if !wrote {
-		log.Debug("Failed to write. Picking new interface at random.")
+		if !wrote {
+			log.Debug("Failed to write. Picking new interface at random.")
+			writeBlocking = true
+		}
 	}
 	log.WithFields(log.Fields{
 		"conn":  connSelection.conn,
 		"iface": connSelection.iface,
 		"addr":  connSelection.conn.RemoteAddr(),
-	}).Debug("Selected new connection")
+	}).Debug("Write to connection")
 	out.sentOn = append(out.sentOn, connSelection) // TODO lock
 	out.date = time.Now().UnixNano()
 	sess.lock.Unlock() // no blocking io in lock
 
-	if !wrote {
+	if writeBlocking {
 		log.Debug("No connections were non-blocking. Falling back to random blocking.")
 		connSelection.Write(*out.data) // haha yes
 		// do actual write outside of lock
 	}
 }
-func (sess *Session) sendOnAll(serialized []byte) {
+
+func (sess *Session) sendStatus(serialized []byte) { // this func is only for sending your status. it starts a ton of goroutines and returns once at least one conn has written.
 	log.Debug("Sending out packet to ", len(sess.conns), " destinations")
 	sess.lock.Lock() // lock is ok because we are starting goroutines to do the blocking io
 	count := len(sess.conns)
@@ -132,7 +166,7 @@ func (sess *Session) sendOnAll(serialized []byte) {
 	}()
 }
 
-func (sess *Session) listenSSH() error {
+func (sess *Session) listenSSH() {
 	contextLog := log.WithFields(log.Fields{
 		"sess-id": sess.sessionID,
 	})
@@ -140,14 +174,14 @@ func (sess *Session) listenSSH() error {
 	for {
 		if uint64(sess.sessionID) == 0 {
 			contextLog.Warning("ListenSSH dying because session was killed.")
-			return nil
+			return
 		}
 		buf := make([]byte, BUF_SIZE)
 		n, err := (*sess.sshConn).Read(buf)
 		if err != nil {
 			contextLog.WithError(err).Error("SSH read err. Killing session.")
 			go sess.kill()
-			return err
+			return
 		}
 		buf = buf[:n]
 		if len(sess.conns) == 0 {
@@ -157,7 +191,7 @@ func (sess *Session) listenSSH() error {
 			time.Sleep(10 * time.Millisecond) // block until nonempty
 			if uint64(sess.sessionID) == 0 {
 				contextLog.Debug("ListenSSH dying with read data because session was killed.")
-				return nil
+				return
 			}
 		}
 		contextLog.Debug("Read ", n, "bytes from ssh")
@@ -219,11 +253,11 @@ func connListen(sess *Session, conn *Connection) error {
 		case *packets.Packet_Control:
 			go sess.onReceiveControl(packet.GetControl())
 		default:
-			err := errors.New("Unknown packet type?")
+			err := errors.New("Unexpected packet type?")
 			log.WithFields(log.Fields{
 				"packet": packet,
 				"body":   packet.GetBody(),
-			}).WithError(err).Error("Unknown packet type")
+			}).WithError(err).Error("Unexpected packet type")
 			return err
 		}
 	}

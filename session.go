@@ -14,14 +14,6 @@ import (
 
 type SessionID uint64
 
-type OutgoingPacket struct {
-	seq     uint32
-	data    *[]byte
-	sentOn  []*Connection // TODO lock
-	date    int64
-	session *Session
-}
-
 type Session struct {
 	lock        sync.Mutex // todo rwmutex
 	sessionID   SessionID
@@ -40,10 +32,9 @@ type Session struct {
 	redundant bool
 }
 
-var sessionsLock sync.Mutex
-
 var (
-	sessions = make(map[SessionID]*Session)
+	sessionsLock sync.Mutex
+	sessions     = make(map[SessionID]*Session)
 )
 
 func NewSessionID() SessionID {
@@ -53,24 +44,20 @@ func NewSessionID() SessionID {
 	}
 	return SessionID(binary.BigEndian.Uint64(b))
 }
+
 func hasSession(id SessionID) bool {
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
 	_, ok := sessions[id]
 	return ok
 }
+
 func getSession(id SessionID) *Session {
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
 	sess, ok := sessions[id]
 	if !ok || sess == nil {
-		sess = &Session{
-			sessionID: id,
-			inflight:  make(map[uint32]*[]byte),
-			outgoing:  make(map[uint32]*OutgoingPacket),
-		}
-		sessions[id] = sess
-		go sess.timer()
+		sess = secretUncheckedMakeSession(id)
 	}
 	return sess
 }
@@ -82,25 +69,31 @@ func newSession() *Session {
 	_, ok := sessions[ID]
 	if ok {
 		//omfg collision??
-		log.WithField("sess-id", ID).Warning("Session id collision detected")
-		return newSession() //recursion solves everything
+		log.WithField("sess-id", ID).Panic("Session id collision detected")
+		//return newSession() //recursion solves everything
 	}
+	return secretUncheckedMakeSession(ID)
+}
+
+func secretUncheckedMakeSession(id SessionID) *Session {
 	sess := &Session{
-		sessionID: ID,
+		sessionID: id,
 		inflight:  make(map[uint32]*[]byte),
 		outgoing:  make(map[uint32]*OutgoingPacket),
 	}
-	sessions[ID] = sess
+	sessions[id] = sess
 	go sess.timer()
 	return sess
 }
-func (sess *Session) getOutgoingSeq() uint32 {
+
+func (sess *Session) incrementOutgoingSeq() uint32 {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	seq := sess.outgoingSeq
 	sess.outgoingSeq++
 	return seq
 }
+
 func (sess *Session) kill() {
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
@@ -115,6 +108,7 @@ func (sess *Session) kill() {
 	delete(sessions, sess.sessionID)
 	sess.sessionID = SessionID(0) // kill timer
 }
+
 func (sess *Session) timer() {
 	defer sess.kill() // guarantee
 	id := sess.sessionID
@@ -144,7 +138,7 @@ func (sess *Session) timer() {
 
 func (sess *Session) tick() {
 	data := marshal(sess.StatusPacket())
-	sess.sendOnAll(data) // not in new goroutine, should block.
+	sess.sendStatus(data) // not in new goroutine, should block.
 }
 
 func (sess *Session) StatusPacket() *packets.Packet {
@@ -165,7 +159,15 @@ func (sess *Session) StatusPacket() *packets.Packet {
 		"inc-seq":   sess.incomingSeq,
 	}).Debug("Sending tick")
 
-	return &packets.Packet{Body: &packets.Packet_Status{Status: &packets.Status{Timestamp: timestamp, IncomingSeq: sess.incomingSeq, Inflight: keys}}}
+	return &packets.Packet{
+		Body: &packets.Packet_Status{
+			Status: &packets.Status{
+				Timestamp:   timestamp,
+				IncomingSeq: sess.incomingSeq,
+				Inflight:    keys,
+			},
+		},
+	}
 }
 
 func (sess *Session) removeConn(conn *Connection) {
@@ -202,8 +204,8 @@ func (sess *Session) onReceiveData(from *Connection, packet *packets.Data) {
 	if sequenceID > sess.highestReceivedSeq {
 		sess.highestReceivedSeq = sequenceID
 	}
-	if sess.incomingSeq == sequenceID {
-		log.WithField("futureSeq", sess.incomingSeq+1).Debug("Sequence is in order. Waiting for next in sequence.")
+	if sess.incomingSeq == sequenceID { // woohoo everything is arriving in the right order yay
+		log.WithField("futureSeq", sess.incomingSeq+1).Debug("Sequence is in order. 👍")
 		sess.writeSSH(data)
 		sess.incomingSeq++
 		sess.checkInflight()
@@ -226,11 +228,22 @@ func (sess *Session) onReceiveData(from *Connection, packet *packets.Data) {
 	sess.checkInflight()
 }
 
-func active(conn *Connection, sess *Session) bool {
+func anyActive(out *OutgoingPacket, sess *Session, alreadyLockedPacket bool) bool {
+	if !alreadyLockedPacket {
+		out.lock.Lock()
+		defer out.lock.Unlock()
+	}
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
-	for i := 0; i < len(sess.conns); i++ {
-		if sess.conns[i] == conn {
+	for _, conn := range out.sentOn {
+		if !func() bool {
+			for i := 0; i < len(sess.conns); i++ {
+				if sess.conns[i] == conn {
+					return false
+				}
+			}
+			return true
+		}() {
 			return true
 		}
 	}
@@ -245,28 +258,34 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 	incomingSeq := packet.GetIncomingSeq()
 	timestamp := packet.GetTimestamp()
 	inflight := packet.GetInflight()
+
 	log.WithFields(log.Fields{
 		"incomingSeq": incomingSeq,
 		"timestamp":   timestamp,
 		"inflight":    inflight,
 	}).Debug("Received status")
+
 	maxReceived := uint32(0)
 	inflightMap := make(map[uint32]bool)
 	for i := 0; i < len(inflight); i++ {
+		inflightMap[inflight[i]] = true
 		if inflight[i] > maxReceived {
 			maxReceived = inflight[i]
 		}
-		inflightMap[inflight[i]] = true
 	}
+
 	sess.outgoingLock.Lock()
 	defer sess.outgoingLock.Unlock()
+
 	keys := make([]uint32, len(sess.outgoing)) // make a copy of the keys beacuse we're gonna modify the map
 	index := 0
 	for k := range sess.outgoing {
 		keys[index] = k
 		index++
 	}
-	log.WithField("keys", keys).Debug("Current outgoing keys: ")
+
+	log.WithField("keys", keys).Debug("Current outgoing keys")
+
 	//only do a prune once we receive a status because that's the only time we get new info that lets us prune
 	for i := 0; i < len(keys); i++ {
 		if keys[i] < incomingSeq {
@@ -284,8 +303,8 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		}
 	}
 
-	for seq := incomingSeq; seq < maxReceived; seq++ {
-		_, ok := inflightMap[seq]
+	for seq := maxReceived; seq >= incomingSeq; seq-- {
+		_, ok := inflightMap[seq] // this isn't sess.inflight its a different map; don't need that lock
 		if ok {
 			continue
 		}
@@ -295,16 +314,15 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		if !ok || outPacket == nil {
 			log.WithFields(log.Fields{
 				"seq": seq,
-			}).Warning("Attempting to fetch already-pruned packet")
-			break
+				"sess-id": sess.sessionID,
+			}).Error("Attempting to fetch already-pruned packet, you slimy bandit. Kicking.")
+			go sess.kill()
+			return
 		}
+
 		diff := time.Now().UnixNano() - outPacket.date
-		stillActive := false
-		for _, conn := range outPacket.sentOn {
-			if active(conn, sess) {
-				stillActive = true
-			}
-		}
+		//outPacket.lock.Lock()
+		stillActive := anyActive(outPacket, sess, true)
 		//stillActive = false means it almost certainly isn't still in transit; the connection is just closed
 		log.WithFields(log.Fields{
 			"time-diff": diff / 1000000,
@@ -313,8 +331,13 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		}).Debug("Time diff (ms)")
 		if !stillActive {
 			outPacket.date = time.Now().UnixNano() // wait a bit before doing this again
-			sess.sendOnAll(*outPacket.data)
+			sess.sendPacketCustom(outPacket, true) // send it over every non-blocking conn we can. and if that doesn't work, over one blocking one
+			//TODO is it ok for status packet processing to block on resending a packet? methinks no... we ARE holding outgoingLock...
+			//and yet, holding outgoing lock will prevent anything else from sending anything
+			//delicious.
 		}
+		//outPacket.lock.Unlock() // ok to do this in the lock; resending due to a dropped connection happens once per packet per dropped connection
+		// something like resending if no acknowledgement after 20 secs would not go in the lock because that'll mess everything up
 
 	}
 }

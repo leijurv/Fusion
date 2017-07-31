@@ -11,9 +11,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var packetDedupLock sync.Mutex
 var (
-	packetDedup = make(map[[32]byte]bool)
+	packetDedupLock sync.Mutex
+	packetDedup     = make(map[[32]byte]bool)
 )
 
 func shouldDedup(packet packets.Packet) bool {
@@ -27,6 +27,7 @@ func shouldDedup(packet packets.Packet) bool {
 	}
 	panic("what is this packet")
 }
+
 func dedup(packet packets.Packet, rawPacket []byte) bool {
 	if !shouldDedup(packet) {
 		return false
@@ -42,8 +43,9 @@ func dedup(packet packets.Packet, rawPacket []byte) bool {
 	packetDedup[hash] = true
 	return false
 }
+
 func (sess *Session) wrap(data []byte) *OutgoingPacket {
-	seq := sess.getOutgoingSeq()
+	seq := sess.incrementOutgoingSeq()
 	//fmt.Println("Wrapping packet with seq", seq)
 	packet := packets.Packet{
 		Body: &packets.Packet_Data{
@@ -53,7 +55,7 @@ func (sess *Session) wrap(data []byte) *OutgoingPacket {
 			},
 		},
 	}
-	log.Debug("Packet constructed")
+	//log.Debug("Packet constructed")
 	marshalled := marshal(&packet)
 	sess.outgoingLock.Lock()
 	defer sess.outgoingLock.Unlock()
@@ -66,10 +68,11 @@ func (sess *Session) wrap(data []byte) *OutgoingPacket {
 	sess.outgoing[seq] = out
 	return out
 }
+
 func marshal(packet *packets.Packet) []byte {
 	packetData, packetErr := proto.Marshal(packet)
 	if packetErr != nil {
-		log.WithError(packetErr).Error("Marshal error")
+		log.WithError(packetErr).Panic("Marshal error")
 		return nil
 	}
 	if len(packetData) >= 65535 {
@@ -81,6 +84,7 @@ func marshal(packet *packets.Packet) []byte {
 	packetData = append(packetLen, packetData...)
 	return packetData
 }
+
 func readProtoPacket(conn *Connection) (packets.Packet, error, []byte) {
 	var packet packets.Packet
 	packetLen := make([]byte, 2)
