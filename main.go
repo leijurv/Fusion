@@ -87,9 +87,9 @@ func main() {
 
 func Client(serverAddr string) error {
 	log.WithFields(log.Fields{
-		"rud":    flagRedundant,
-		"rud-up": flagRedundantUpload,
-		"rud-dl": flagRedundantDownload,
+		"red":    flagRedundant,
+		"red-up": flagRedundantUpload,
+		"red-dl": flagRedundantDownload,
 		"listen": flagListenMode,
 		"addr":   flagAddress,
 		"poll":   flagIfacePoll,
