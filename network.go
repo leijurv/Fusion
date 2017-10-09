@@ -75,6 +75,7 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 		//it's still in outgoing
 		//so when a conn is reestablished it'll be sent
 		log.Warning("No open connections. Will send when conn is reestablished.")
+		sess.lock.Unlock()
 		return
 	}
 	var connSelection *Connection
