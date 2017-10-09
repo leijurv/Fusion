@@ -137,6 +137,11 @@ func (sess *Session) sendStatus(serialized []byte) { // this func is only for se
 		c.Write(serialized)
 		return
 	}
+	if count == 0 {
+		log.Debug("0 destination status, exiting")
+		sess.lock.Unlock()
+		return
+	}
 	done := make(chan error)
 	for i := 0; i < count; i++ {
 		//fmt.Println("Writing")
