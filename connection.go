@@ -59,6 +59,11 @@ func (conn *Connection) Write(data []byte) error {
 		return err
 	}
 	if !ok {
+		defer func() {
+      			if r := recover(); r != nil {
+            			fmt.Println("Recovered Write panic", r)
+        		}
+    		}()
 		conn.outChan <- data // blocking write
 		log.Debug("Had to fallback to blocking write")
 	}
