@@ -61,7 +61,7 @@ func (conn *Connection) Write(data []byte) error {
 	if !ok {
 		defer func() {
       			if r := recover(); r != nil {
-            			fmt.Println("Recovered Write panic", r)
+            			log.Error("Recovered Write panic", r)
         		}
     		}()
 		conn.outChan <- data // blocking write
