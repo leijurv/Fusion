@@ -100,7 +100,7 @@ func Client(serverAddr string) error {
 		"addr":   flagAddress,
 		"poll":   flagIfacePoll,
 	}).Info("Starting client...")
-	ln, err := net.Listen("tcp", ":" + strconv.Itoa(flagClientListenPort))
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(flagClientListenPort))
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func Server() error {
 		"addr":   flagAddress,
 		"poll":   flagIfacePoll,
 	}).Info("Starting server...")
-	ln, err := net.Listen("tcp", ":" + strconv.Itoa(flagServerListenPort))
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(flagServerListenPort))
 	if err != nil {
 		return err
 	}

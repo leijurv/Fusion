@@ -265,12 +265,14 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		"inflight":    inflight,
 	}).Debug("Received status")
 
-	maxReceived := uint32(0)
+	maxReceived := uint32(0) // i would make this -1 but it's a uint lol
+	foundAny := false
 	inflightMap := make(map[uint32]bool)
 	for i := 0; i < len(inflight); i++ {
 		inflightMap[inflight[i]] = true
 		if inflight[i] > maxReceived {
 			maxReceived = inflight[i]
+			foundAny = true
 		}
 	}
 
@@ -302,7 +304,9 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 			delete(sess.outgoing, inflight[j])
 		}
 	}
-
+	if !foundAny { // maxReceived isn't really 0, they actually haven't even received packed 0, so can't run any of this just yet
+		return
+	}
 	for seq := maxReceived; seq >= incomingSeq; seq-- {
 		_, ok := inflightMap[seq] // this isn't sess.inflight its a different map; don't need that lock
 		if ok {
@@ -313,7 +317,7 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 		outPacket, ok := sess.outgoing[seq]
 		if !ok || outPacket == nil {
 			log.WithFields(log.Fields{
-				"seq": seq,
+				"seq":     seq,
 				"sess-id": sess.sessionID,
 			}).Error("Attempting to fetch already-pruned packet, you slimy bandit. Kicking.")
 			go sess.kill()
