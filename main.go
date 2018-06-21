@@ -93,6 +93,7 @@ func main() {
 
 func Client(serverAddr string) error {
 	log.WithFields(log.Fields{
+		"port":   flagClientListenPort,
 		"red":    flagRedundant,
 		"red-up": flagRedundantUpload,
 		"red-dl": flagRedundantDownload,
@@ -121,9 +122,9 @@ func Client(serverAddr string) error {
 
 func Server() error {
 	log.WithFields(log.Fields{
-		"listen": flagListenMode,
-		"addr":   flagAddress,
-		"poll":   flagIfacePoll,
+		"listen":  flagListenMode,
+		"forward": flagServerDestination,
+		"poll":    flagIfacePoll,
 	}).Info("Starting server...")
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(flagServerListenPort))
 	if err != nil {
