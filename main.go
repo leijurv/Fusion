@@ -30,6 +30,9 @@ func (s stringMapVar) Set(value string) error {
 	return nil
 }
 
+var flagLocalPort int
+var flagClientListenPort int
+var flagServerListenPort int
 var flagListenMode bool
 var flagAddress string
 var flagIfacePoll int
@@ -46,6 +49,9 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{})
 	log.SetLevel(log.DebugLevel)
 
+	flag.IntVar(&flagLocalPort, "lp", 22, "(server only parameter) What port to connect to locally")
+	flag.IntVar(&flagClientListenPort, "cp", 5021, "(client only parameter) What port to listen on for the application")
+	flag.IntVar(&flagServerListenPort, "sp", 5022, "(client only parameter) What port to listen on for the application")
 	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? (Improves reliability)")
 	flag.BoolVar(&flagRedundantDownload, "rd", false, "Redundant mode only for downloads")
 	flag.BoolVar(&flagRedundantUpload, "ru", false, "Redundant mode only for uploads")
@@ -94,7 +100,7 @@ func Client(serverAddr string) error {
 		"addr":   flagAddress,
 		"poll":   flagIfacePoll,
 	}).Info("Starting client...")
-	ln, err := net.Listen("tcp", ":5021")
+	ln, err := net.Listen("tcp", ":" + strconv.Itoa(flagClientListenPort))
 	if err != nil {
 		return err
 	}
@@ -119,7 +125,7 @@ func Server() error {
 		"addr":   flagAddress,
 		"poll":   flagIfacePoll,
 	}).Info("Starting server...")
-	ln, err := net.Listen("tcp", ":5022")
+	ln, err := net.Listen("tcp", ":" + strconv.Itoa(flagServerListenPort))
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/howardstark/fusion/protos"
@@ -50,7 +51,7 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {
 		log.WithField("id", id).Debug("Server is initializing new ssh conn")
-		sshConn, err := net.Dial("tcp", "localhost:22")
+		sshConn, err := net.Dial("tcp", "localhost:" + strconv.Itoa(flagLocalPort))
 		if err != nil {
 			log.WithError(err).Error("Localhost dial error")
 			return err
