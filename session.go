@@ -29,6 +29,8 @@ type Session struct {
 	outgoingLock sync.Mutex // this lock is ONLY for the outgoing map
 	outgoing     map[uint32]*OutgoingPacket
 	//
+	blockingSendSelector sync.Mutex
+	//
 	redundant bool
 }
 

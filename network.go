@@ -43,7 +43,8 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 		multipleNonBlocking = true
 	}
 	sess.lock.Lock()
-	if len(sess.conns) == 1 {
+	nsc := len(sess.conns)
+	if nsc == 1 {
 		c := sess.conns[0]
 		out.sentOn = append(out.sentOn, c) // TODO lock
 		out.date = time.Now().UnixNano()
@@ -52,7 +53,7 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 		return
 	}
 	var avail []*Connection
-	if len(out.sentOn) == 0 {
+	if len(out.sentOn) != 0 {
 		avail = make([]*Connection, 0, len(sess.conns)) //don't do "len(sess.conns)-len(out.sentOn)" because that could become negative (dupes in sentOn, connections dropping out, etc)
 
 		alreadyUsedMap := make(map[*Connection]bool)
@@ -65,11 +66,11 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 				avail = append(avail, sess.conns[i])
 			}
 		}
-		if len(avail) == 0 {
-			avail = sess.conns // if we've already tried them all, try them all again!
-		}
 	}
 	if len(avail) == 0 {
+		avail = sess.conns // if we've already tried them all, try them all again!
+	}
+	if len(avail) == 0 { // hmm its *still* empty?
 		//this doesn't need to return an error
 		//if there are no connections, it can just not send
 		//it's still in outgoing
@@ -119,12 +120,42 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 	}).Debug("Write to connection")
 	out.sentOn = append(out.sentOn, connSelection) // TODO lock
 	out.date = time.Now().UnixNano()
-	sess.lock.Unlock() // no blocking io in lock
 
 	if writeBlocking {
 		log.Debug("No connections were non-blocking. Falling back to random blocking.")
-		connSelection.Write(*out.data) // haha yes
-		// do actual write outside of lock
+		if len(avail) == 1 {
+			sess.lock.Unlock()             // since avail is 1, we can do this blocking write outside blockingSendSelector
+			connSelection.Write(*out.data) // haha yes
+			// do actual write outside of lock
+			return
+		}
+		//multiple connections available, but none of them willing
+		//wait until one of them is
+
+		sess.blockingSendSelector.Lock() // this shouldn't cause deadlock because blockingSendSelector is only used within sendPacketCustom
+		sess.lock.Unlock()               // unlock this afterwards so no one else can blocking send with us
+		defer sess.blockingSendSelector.Unlock()
+		// deadlock is impossible here because no one can wait for blockingsendselector *without already having* the normal lock
+
+		for {
+			if len(sess.conns) != nsc { // something has changed
+				return
+			}
+			if uint64(sess.sessionID) == 0 { // session is killed
+				return
+			}
+			rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano())) // we know len(avail) is not 1
+			perm := rSrc.Perm(len(avail))
+			for i := 0; i < len(avail); i++ {
+				ok, _ := avail[perm[i]].WriteNonBlocking(*out.data)
+				if ok {
+					return
+				}
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	} else {
+		sess.lock.Unlock()
 	}
 }
 
