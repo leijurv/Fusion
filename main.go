@@ -49,7 +49,7 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{})
 	log.SetLevel(log.DebugLevel)
 
-	flag.IntVar(&flagServerDestination, "lp", "localhost:22", "(server only parameter) Where to forward the connection")
+	flag.StringVar(&flagServerDestination, "lp", "localhost:22", "(server only parameter) Where to forward the connection")
 	flag.IntVar(&flagClientListenPort, "cp", 5021, "(client only parameter) What port to listen on for the application")
 	flag.IntVar(&flagServerListenPort, "sp", 5022, "(client only parameter) What port to listen on for the application")
 	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? (Improves reliability)")
