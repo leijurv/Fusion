@@ -54,14 +54,14 @@ func (conn *Connection) WriteNonBlocking(data []byte) (bool, error) {
 }
 
 func (conn *Connection) Write(data []byte) error {
-	ok, err := conn.WriteNonBlocking(data)
+	ok, err := conn.WriteNonBlocking(data) // this makes sure that the connection is open, and writes immediately if possible
 	if err != nil {
 		return err
 	}
 	if !ok {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Error("Recovered Write panic", r)
+				log.Error("Recovered Write panic", r) // this happens when the connection is closed between conn.lock.Unlock in the call to WriteNonBlocking, and the blocking channel write below. it happens more often than you'd think.
 			}
 		}()
 		conn.outChan <- data // blocking write
@@ -110,7 +110,7 @@ func (conn *Connection) Close() {
 		conn.running = false
 		select {
 		case conn.outChan <- []byte("goodbye"):
-		default:
+		default: // outChan is full, so no need to blockingly or otherwise write goodbye wake up the write loop thread; since it's full it's already going to be
 		}
 		close(conn.outChan)
 	}

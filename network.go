@@ -137,7 +137,7 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 		defer sess.blockingSendSelector.Unlock()
 		// deadlock is impossible here because no one can wait for blockingsendselector *without already having* the normal lock
 
-		for {
+		for j := 0; j < 500; j++ {
 			if len(sess.conns) != nsc { // something has changed
 				return
 			}
