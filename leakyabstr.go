@@ -22,17 +22,21 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 		log.Error("Expected init packet, instead received: ", packet.GetBody())
 		return errors.New("Expected init packet")
 	}
-	id := SessionID(packet.GetInit().GetSession())
-	inter := packet.GetInit().GetInterface()
+	packetInit := packet.GetInit()
+	if packetInit == nil {
+		panic("protobuf guarantees this won't happen?")
+	}
+	id := SessionID(packetInit.GetSession())
+	inter := packetInit.GetInterface()
 	tcp.ifaceID = inter
 	log.WithFields(log.Fields{
 		"conn":  conn,
 		"id":    id,
 		"addr":  conn.RemoteAddr(),
-		"iface": packet.GetInit().GetInterface(),
+		"iface": packetInit.GetInterface(),
 	}).Debug("Server received connection")
-
-	err := tcp.Write(marshal(&packets.Packet{
+	// TODO SetWriteDeadline for confirm?
+	err := tcp.Write(marshal(&packets.Packet{ // use Connection.Write instead of net.Conn.Write to prime up the writeloop goroutine, start channels etc
 		Body: &packets.Packet_Confirm{
 			Confirm: &packets.Confirm{
 				Session:   uint64(id),
@@ -41,11 +45,12 @@ func ServerReceivedClientConnection(conn net.Conn) error {
 		},
 	}))
 	if err != nil {
+		// session hsan't been created yet; nothing to clean up
+		// if we're unable to write the confirm, can just cleanly exit and pass up the requisite error
 		return err
 	}
-
 	sess := getSession(SessionID(id))
-	sess.onReceiveControl(packet.GetInit().GetControl())
+	sess.onReceiveControl(packetInit.GetControl()) // not just for the first session. this allows client to change settings after initial.
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	if sess.sshConn == nil {

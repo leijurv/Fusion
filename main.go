@@ -39,6 +39,7 @@ var flagIfacePoll int
 var flagRedundant bool
 var flagRedundantDownload bool
 var flagRedundantUpload bool
+var flagRandReorder bool
 var (
 	flagInterfaces = stringMapVar{
 		contents: make(map[string]int),
@@ -57,7 +58,8 @@ func init() {
 	flag.BoolVar(&flagRedundantUpload, "ru", false, "Redundant mode only for uploads")
 	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
 	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
-	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces")
+	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces (seconds)")
+	flag.BoolVar(&flagRandReorder, "randreorder", false, "Enable this to purposefully split up data into smaller chunks and randomly reorder them before sending. Useful to test the reassembler, has a huge negative impact on performance.")
 	flag.Var(flagInterfaces, "iface", "Specifies which interfaces will be used for connections, as well as the bandwidth for each interface.\n"+
 		"Bandwidth is in KB/s. For unrestricted bandwidth, specify 0.\n"+
 		"Usage: fusion -iface=<interface name>,<bandwidth>"+

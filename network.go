@@ -16,8 +16,6 @@ const (
 	//the real slow part is incoming and outgoing, and keeping track of all this data, all the goroutines, outgoing channels, inflight maps, etc. We want to have big chunks. At 10mbit, 64kb chunks result in ~20 per second. That's completely doable. Smaller chunks like the TCP max size on different networks would be really pushing it.
 	BUF_SIZE = 65535 - 11 - 1 // encoding with protobuf into the Packet_Data results in 11 bytes added. when BUF_SIZE is 65536, we get packets up to 65547 in length.
 	//by limiting the post-wrapping length to less than 65535, we can encode the protobuf packet length into 2 bytes instead of 4.
-
-	RAND_REORDER = false // TODO cli option
 )
 
 type OutgoingPacket struct {
@@ -58,7 +56,7 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 
 		alreadyUsedMap := make(map[*Connection]bool)
 		for i := 0; i < len(out.sentOn); i++ {
-			alreadyUsedMap[out.sentOn[i]] = true
+			alreadyUsedMap[out.sentOn[i]] = true // flatten sentOn array into fast lookup map. also deals with possible duplicates in out.sentOn
 		}
 		for i := 0; i < len(sess.conns); i++ {
 			_, ok := alreadyUsedMap[sess.conns[i]]
@@ -137,23 +135,32 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 		defer sess.blockingSendSelector.Unlock()
 		// deadlock is impossible here because no one can wait for blockingsendselector *without already having* the normal lock
 
+		// so, turns out this can delay sesslock, because this holds blockingSendSelector through IO, and the next packet will wait for blockingSendSelector before unlocking sesslock
+		// however, this isn't quite a bad thing. this means that the packet after next will be delayed even before it can pick available connections (this function locks sesslock before calculating avail)
+		// this means that a really glitchy thing here can't ripple more than 2 packets ahead
+		// this is actually an improvement over before, when this function would blindly blockingly write to a random conn
+		// god, that was barbaric =)
+
+		// pick a random order once, it's effectively the same
+		rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano())) // we know len(avail) is not 1
+		perm := rSrc.Perm(len(avail))
 		for j := 0; j < 500; j++ {
 			if len(sess.conns) != nsc { // something has changed
 				return
 			}
-			if uint64(sess.sessionID) == 0 { // session is killed
+			if sess.isKilled() {
 				return
 			}
-			rSrc := mrand.New(mrand.NewSource(time.Now().UnixNano())) // we know len(avail) is not 1
-			perm := rSrc.Perm(len(avail))
 			for i := 0; i < len(avail); i++ {
 				ok, _ := avail[perm[i]].WriteNonBlocking(*out.data)
 				if ok {
+					log.Debug("Successful unblocking write attempt!")
 					return
 				}
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
+		log.Debug("Timing out unblocking write attempts!!")
 	} else {
 		sess.lock.Unlock()
 	}
@@ -209,15 +216,15 @@ func (sess *Session) listenSSH() {
 	})
 	defer sess.kill() // guarantee
 	for {
-		if uint64(sess.sessionID) == 0 {
+		if sess.isKilled() {
 			contextLog.Warning("ListenSSH dying because session was killed.")
 			return
 		}
 		buf := make([]byte, BUF_SIZE)
-		n, err := (*sess.sshConn).Read(buf)
+		n, err := (*sess.sshConn).Read(buf) // no deadline, on purpose
 		if err != nil {
 			contextLog.WithError(err).Error("SSH read err. Killing session.")
-			go sess.kill()
+			//go sess.kill() // that was overkill. it's already defered haha.
 			return
 		}
 		buf = buf[:n]
@@ -226,13 +233,13 @@ func (sess *Session) listenSSH() {
 		} //TODO is it ok to do len(sess.conns) without lock? i think it's fine but not certain... we aren't iterating, reading, or modifying so probably
 		for len(sess.conns) == 0 { // no point in reading from ssh if the data has nowhere to go
 			time.Sleep(10 * time.Millisecond) // block until nonempty
-			if uint64(sess.sessionID) == 0 {
+			if sess.isKilled() {
 				contextLog.Debug("ListenSSH dying with read data because session was killed.")
 				return
 			}
 		}
 		contextLog.Debug("Read ", n, "bytes from ssh")
-		if RAND_REORDER {
+		if flagRandReorder {
 			randomize(buf, sess)
 		} else {
 			sess.sendPacket(sess.wrap(buf))

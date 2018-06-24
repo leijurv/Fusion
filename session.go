@@ -108,14 +108,17 @@ func (sess *Session) kill() {
 	sessionsLock.Lock()
 	defer sessionsLock.Unlock()
 	delete(sessions, sess.sessionID)
-	sess.sessionID = SessionID(0) // kill timer
+	sess.sessionID = SessionID(0) // setting session id to zero marks as killed (see next function), and kills timer, etc
+}
+func (sess *Session) isKilled() bool {
+	return uint64(sess.sessionID) == 0
 }
 
 func (sess *Session) timer() {
 	defer sess.kill() // guarantee
 	id := sess.sessionID
 	ticksWithoutConns := 0
-	for uint64(sess.sessionID) != 0 {
+	for !sess.isKilled() {
 		time.Sleep(1 * time.Second)
 		sess.tick()
 		log.WithFields(log.Fields{
@@ -227,14 +230,12 @@ func (sess *Session) onReceiveData(from *Connection, packet *packets.Data) {
 		"from":      from.LocalAddr(),
 	}).Debug("Out of order.")
 	sess.inflight[sequenceID] = &data
-	sess.checkInflight()
+	sess.checkInflight() // technically this call should never result in anything happening...? if sess.incomingSeq < sequenceID then sess.inflight[sess.incomingSeq] will always be nil...
 }
 
-func anyActive(out *OutgoingPacket, sess *Session, alreadyLockedPacket bool) bool {
-	if !alreadyLockedPacket {
-		out.lock.Lock()
-		defer out.lock.Unlock()
-	}
+func anyActive(out *OutgoingPacket, sess *Session) bool {
+	out.lock.Lock()
+	defer out.lock.Unlock()
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	for _, conn := range out.sentOn {
@@ -328,7 +329,7 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 
 		diff := time.Now().UnixNano() - outPacket.date
 		//outPacket.lock.Lock()
-		stillActive := anyActive(outPacket, sess, true)
+		stillActive := anyActive(outPacket, sess)
 		//stillActive = false means it almost certainly isn't still in transit; the connection is just closed
 		log.WithFields(log.Fields{
 			"time-diff": diff / 1000000,
@@ -336,8 +337,12 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 			"active":    stillActive,
 		}).Debug("Time diff (ms)")
 		if !stillActive {
+			//this will only ever resend if there's an existing connection that it hasn't been sent on yet
+			//there would be no point otherwise, because of tcp ordering
+			//therefore, this should never cause sendPacketCustom to resort to resetting conn array...
 			outPacket.date = time.Now().UnixNano() // wait a bit before doing this again
 			sess.sendPacketCustom(outPacket, true) // send it over every non-blocking conn we can. and if that doesn't work, over one blocking one
+			//the ", true" will only have an effect if there are 3 connections or more by the way. since it's already failed on one conn...
 			//TODO is it ok for status packet processing to block on resending a packet? methinks no... we ARE holding outgoingLock...
 			//and yet, holding outgoing lock will prevent anything else from sending anything
 			//delicious.
