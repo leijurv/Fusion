@@ -92,6 +92,8 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 			c := avail[perm[i]]
 			ok, _ := c.WriteNonBlocking(*out.data)
 			if ok {
+				out.sentOn = append(out.sentOn, c)
+				out.date = time.Now().UnixNano()
 				if wrote { // we already did one write, dont just pretend like it didn't happen, broadcast it to the world =DDDDDDDDDD
 					log.WithFields(log.Fields{
 						"conn":  connSelection.conn,
@@ -111,17 +113,17 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 			writeBlocking = true
 		}
 	}
-	log.WithFields(log.Fields{
-		"conn":  connSelection.conn,
-		"iface": connSelection.iface,
-		"addr":  connSelection.conn.RemoteAddr(),
-	}).Debug("Write to connection")
-	out.sentOn = append(out.sentOn, connSelection) // TODO lock
-	out.date = time.Now().UnixNano()
 
 	if writeBlocking {
 		log.Debug("No connections were non-blocking. Falling back to random blocking.")
 		if len(avail) == 1 {
+			log.WithFields(log.Fields{
+				"conn":  connSelection.conn,
+				"iface": connSelection.iface,
+				"addr":  connSelection.conn.RemoteAddr(),
+			}).Debug("Write to connection")
+			out.sentOn = append(out.sentOn, connSelection)
+			out.date = time.Now().UnixNano()
 			sess.lock.Unlock()             // since avail is 1, we can do this blocking write outside blockingSendSelector
 			connSelection.Write(*out.data) // haha yes
 			// do actual write outside of lock
@@ -154,6 +156,13 @@ func (sess *Session) sendPacketCustom(out *OutgoingPacket, multipleNonBlocking b
 			for i := 0; i < len(avail); i++ {
 				ok, _ := avail[perm[i]].WriteNonBlocking(*out.data)
 				if ok {
+					log.WithFields(log.Fields{
+						"conn":  avail[perm[i]].conn,
+						"iface": avail[perm[i]].iface,
+						"addr":  avail[perm[i]].conn.RemoteAddr(),
+					}).Debug("Write to connection")
+					out.sentOn = append(out.sentOn, avail[perm[i]])
+					out.date = time.Now().UnixNano()
 					log.Debug("Successful unblocking write attempt!")
 					return
 				}
