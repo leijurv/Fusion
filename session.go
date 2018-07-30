@@ -89,6 +89,9 @@ func secretUncheckedMakeSession(id SessionID) *Session {
 }
 
 func (sess *Session) incrementOutgoingSeq() uint32 {
+	//TODO this should *NOT* need a lock
+	//I don't remember why I originally added it though... maybe there was a reason
+	//ah well, it's just performance
 	sess.lock.Lock()
 	defer sess.lock.Unlock()
 	seq := sess.outgoingSeq
@@ -230,7 +233,7 @@ func (sess *Session) onReceiveData(from *Connection, packet *packets.Data) {
 		"from":      from.LocalAddr(),
 	}).Debug("Out of order.")
 	sess.inflight[sequenceID] = &data
-	sess.checkInflight() // technically this call should never result in anything happening...? if sess.incomingSeq < sequenceID then sess.inflight[sess.incomingSeq] will always be nil...
+	//no need to checkInFlight, since this packet isn't the immediate next one, it's not possible for checkInFlight to do anything.
 }
 
 func anyActive(out *OutgoingPacket, sess *Session) bool {
@@ -307,7 +310,7 @@ func (sess *Session) onReceiveStatus(packet *packets.Status) {
 			delete(sess.outgoing, inflight[j])
 		}
 	}
-	if !foundAny { // maxReceived isn't really 0, they actually haven't even received packed 0, so can't run any of this just yet
+	if !foundAny { // maxReceived isn't really 0, they actually haven't even received packet 0, so can't run any of this just yet
 		return
 	}
 	for seq := maxReceived; seq >= incomingSeq; seq-- {
