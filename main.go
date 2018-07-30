@@ -52,7 +52,7 @@ func init() {
 
 	flag.StringVar(&flagServerDestination, "lp", "localhost:22", "(server only parameter) Where to forward the connection")
 	flag.IntVar(&flagClientListenPort, "cp", 5021, "(client only parameter) What port to listen on for the application")
-	flag.IntVar(&flagServerListenPort, "sp", 5022, "(client only parameter) What port to listen on for the application")
+	flag.IntVar(&flagServerListenPort, "sp", 5022, "(server only parameter) What port to listen on for the application")
 	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? (Improves reliability)")
 	flag.BoolVar(&flagRedundantDownload, "rd", false, "Redundant mode only for downloads")
 	flag.BoolVar(&flagRedundantUpload, "ru", false, "Redundant mode only for uploads")
