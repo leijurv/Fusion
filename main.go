@@ -53,14 +53,14 @@ func init() {
 	flag.StringVar(&flagServerDestination, "lp", "localhost:22", "(server only parameter) Where to forward the connection")
 	flag.IntVar(&flagClientListenPort, "cp", 5021, "(client only parameter) What port to listen on for the application")
 	flag.IntVar(&flagServerListenPort, "sp", 5022, "(server only parameter) What port to listen on for the application")
-	flag.BoolVar(&flagRedundant, "r", false, "Send packets on every interface instead of just one? (Improves reliability)")
-	flag.BoolVar(&flagRedundantDownload, "rd", false, "Redundant mode only for downloads")
-	flag.BoolVar(&flagRedundantUpload, "ru", false, "Redundant mode only for uploads")
-	flag.BoolVar(&flagListenMode, "l", false, "Should listen?")
-	flag.StringVar(&flagAddress, "address", "localhost:5022", "Address of the server")
-	flag.IntVar(&flagIfacePoll, "poll", 5, "How fast we should poll for new interfaces (seconds)")
+	flag.BoolVar(&flagRedundant, "r", false, "(client only parameter) Send packets on every interface instead of just one? (Improves reliability)")
+	flag.BoolVar(&flagRedundantDownload, "rd", false, "(client only parameter) Redundant mode only for downloads")
+	flag.BoolVar(&flagRedundantUpload, "ru", false, "(client only parameter) Redundant mode only for uploads")
+	flag.BoolVar(&flagListenMode, "l", false, "(determines client or server behavior) Should listen?")
+	flag.StringVar(&flagAddress, "address", "localhost:5022", "(client only parameter) Address of the server")
+	flag.IntVar(&flagIfacePoll, "poll", 5, "(client only parameter) How fast we should poll for new interfaces (seconds)")
 	flag.BoolVar(&flagRandReorder, "randreorder", false, "Enable this to purposefully split up data into smaller chunks and randomly reorder them before sending. Useful to test the reassembler, has a huge negative impact on performance.")
-	flag.Var(flagInterfaces, "iface", "Specifies which interfaces will be used for connections, as well as the bandwidth for each interface.\n"+
+	flag.Var(flagInterfaces, "iface", "(client only parameter) (deprecated) Specifies which interfaces will be used for connections, as well as the bandwidth for each interface.\n"+
 		"Bandwidth is in KB/s. For unrestricted bandwidth, specify 0.\n"+
 		"Usage: fusion -iface=<interface name>,<bandwidth>"+
 		"Example: fusion -iface=en0,50")
